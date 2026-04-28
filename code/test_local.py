@@ -2,10 +2,15 @@
 Local testing script - verify code works without GPU/full data
 """
 
+import os
 import torch
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
+# Local tests should use cached HuggingFace files and avoid network side effects.
+os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+os.environ.setdefault('HF_HUB_OFFLINE', '1')
 
 # Import our modules
 from config import Config
@@ -14,7 +19,24 @@ from model import create_model
 from evaluate import evaluate
 
 
-def create_dummy_data(output_path='../data/split_seed42.csv', n_samples=30):
+TEST_DATA_DIR = Path(__file__).resolve().parents[1] / 'tmp_test_data'
+
+
+def get_test_config():
+    """Create a config object that cannot overwrite project data."""
+    config = Config()
+    config.BATCH_SIZE = 4
+    config.DEVICE = 'cpu'
+    config.DATA_DIR = str(TEST_DATA_DIR)
+    return config
+
+
+def get_dummy_csv_path(config):
+    csv_path = Path(config.DATA_DIR) / 'split_seed42.csv'
+    return csv_path if csv_path.exists() else create_dummy_data(csv_path)
+
+
+def create_dummy_data(output_path=None, n_samples=30):
     """
     Create dummy data for testing
 
@@ -48,7 +70,7 @@ def create_dummy_data(output_path='../data/split_seed42.csv', n_samples=30):
     })
 
     # Save
-    output_path = Path(output_path)
+    output_path = Path(output_path or TEST_DATA_DIR / 'split_seed42.csv')
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
 
@@ -69,13 +91,10 @@ def test_dataset():
 
     from transformers import AutoTokenizer
 
-    config = Config()
-    config.BATCH_SIZE = 4  # Small batch for testing
+    config = get_test_config()
 
     # Create dummy data if needed
-    csv_path = Path(config.DATA_DIR) / 'split_seed42.csv'
-    if not csv_path.exists():
-        csv_path = create_dummy_data(csv_path)
+    csv_path = get_dummy_csv_path(config)
 
     # Load tokenizer
     print('\nLoading tokenizer...')
@@ -102,8 +121,7 @@ def test_model():
     print('TEST 2: Model Creation and Forward Pass')
     print('='*60)
 
-    config = Config()
-    config.DEVICE = 'cpu'  # Force CPU for testing
+    config = get_test_config()
 
     # Create model
     print('\nCreating model...')
@@ -112,7 +130,8 @@ def test_model():
     # Create dummy input
     batch_size = 4
     seq_len = 128
-    dummy_input_ids = torch.randint(0, 1000, (batch_size, seq_len))
+    vocab_size = model.encoder.config.vocab_size
+    dummy_input_ids = torch.randint(0, vocab_size, (batch_size, seq_len))
     dummy_attention_mask = torch.ones(batch_size, seq_len)
 
     # Forward pass
@@ -136,14 +155,10 @@ def test_dataloader():
     print('TEST 3: DataLoader')
     print('='*60)
 
-    config = Config()
-    config.BATCH_SIZE = 4
-    config.DEVICE = 'cpu'
+    config = get_test_config()
 
     # Create dummy data if needed
-    csv_path = Path(config.DATA_DIR) / 'split_seed42.csv'
-    if not csv_path.exists():
-        csv_path = create_dummy_data(csv_path)
+    csv_path = get_dummy_csv_path(config)
 
     # Create dataloaders
     print('\nCreating dataloaders...')
@@ -172,14 +187,10 @@ def test_training_step():
     print('TEST 4: Training Step')
     print('='*60)
 
-    config = Config()
-    config.BATCH_SIZE = 4
-    config.DEVICE = 'cpu'
+    config = get_test_config()
 
     # Create dummy data if needed
-    csv_path = Path(config.DATA_DIR) / 'split_seed42.csv'
-    if not csv_path.exists():
-        csv_path = create_dummy_data(csv_path)
+    csv_path = get_dummy_csv_path(config)
 
     # Create dataloader
     train_loader, _, _, _ = create_dataloaders(csv_path, config, seed=42)
@@ -224,14 +235,10 @@ def test_evaluation():
     print('TEST 5: Evaluation')
     print('='*60)
 
-    config = Config()
-    config.BATCH_SIZE = 4
-    config.DEVICE = 'cpu'
+    config = get_test_config()
 
     # Create dummy data if needed
-    csv_path = Path(config.DATA_DIR) / 'split_seed42.csv'
-    if not csv_path.exists():
-        csv_path = create_dummy_data(csv_path)
+    csv_path = get_dummy_csv_path(config)
 
     # Create dataloader
     _, _, test_loader, label_stats = create_dataloaders(csv_path, config, seed=42)
