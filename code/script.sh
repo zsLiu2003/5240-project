@@ -15,5 +15,9 @@ python code/train.py \
     --data-dir data \
     --results-dir results
 
-#main experiment
-python code/train.py --experiment main
+#main experiment (two-stage: freeze head -> unfreeze backbone)
+python code/train.py --experiment main \
+    --data-dir data \
+    --results-dir results
+#  Optional: limit Stage-2 to last N transformer layers if unstable:
+#  python code/train.py --experiment main --unfreeze-layers 4 ...

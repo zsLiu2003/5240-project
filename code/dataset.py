@@ -4,9 +4,10 @@ Dataset class for ChemBERTa binding energy prediction
 
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from transformers import AutoTokenizer
 import numpy as np
+from sklearn.model_selection import KFold
 
 
 class BindingEnergyDataset(Dataset):
@@ -143,5 +144,64 @@ def create_dataloaders(csv_path, config, seed=42):
         num_workers=0,
         pin_memory=True if config.DEVICE == 'cuda' else False
     )
+
+    return train_loader, val_loader, test_loader, label_stats
+
+
+def create_cv_dataloaders(csv_path, config, seed, fold_idx, n_folds=5):
+    """
+    Create train/val/test dataloaders for K-fold CV.
+
+    CV is done on train+val combined; test set remains fixed.
+
+    Args:
+        csv_path: Path to split CSV file
+        config: Config object
+        seed: Random seed for KFold
+        fold_idx: Current fold index (0 to n_folds-1)
+        n_folds: Number of folds
+
+    Returns:
+        train_loader, val_loader, test_loader, label_stats
+    """
+    tokenizer = AutoTokenizer.from_pretrained(config.MODEL_NAME)
+    df = pd.read_csv(csv_path)
+
+    # Separate test set (fixed)
+    test_df = df[df['split'] == 'test'].reset_index(drop=True)
+
+    # Combine train+val for CV
+    dev_df = df[df['split'].isin(['train', 'val'])].reset_index(drop=True)
+
+    # K-fold split on dev_df
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    splits = list(kf.split(dev_df))
+    train_idx, val_idx = splits[fold_idx]
+
+    # Create temporary CSV-like dataframes with 'split' column
+    train_fold_df = dev_df.iloc[train_idx].copy()
+    train_fold_df['split'] = 'train'
+    val_fold_df = dev_df.iloc[val_idx].copy()
+    val_fold_df['split'] = 'val'
+    test_df_copy = test_df.copy()
+    test_df_copy['split'] = 'test'
+
+    # Combine and save to temp CSV
+    import tempfile
+    temp_csv = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+    combined = pd.concat([train_fold_df, val_fold_df, test_df_copy], ignore_index=True)
+    combined.to_csv(temp_csv.name, index=False)
+    temp_csv.close()
+
+    # Use existing create_dataloaders
+    train_loader, val_loader, test_loader, label_stats = create_dataloaders(
+        temp_csv.name, config, seed
+    )
+
+    # Clean up temp file
+    import os
+    os.unlink(temp_csv.name)
+
+    print(f'  CV Fold {fold_idx+1}/{n_folds}: train={len(train_idx)}, val={len(val_idx)}, test={len(test_df)}')
 
     return train_loader, val_loader, test_loader, label_stats
