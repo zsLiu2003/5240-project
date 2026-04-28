@@ -3,6 +3,8 @@
   "config": {
     "model": "seyonec/ChemBERTa-zinc-base-v1",
     "freeze_encoder": true,
+    "from_scratch": false,
+    "experiment_name": "main_method",
     "batch_size": 16,
     "learning_rate": 0.001,
     "max_epochs": 100
@@ -154,10 +156,10 @@
     ]
   },
   "test_metrics": {
-    "RMSE": 0.17907555401325226,
-    "MAE": 0.13780638575553894,
-    "R2": 0.4201653003692627
+    "RMSE": 0.17409364879131317,
+    "MAE": 0.13504403829574585,
+    "R2": 0.45197874307632446
   },
-  "training_time": 10.134195566177368,
+  "training_time": 10.391214609146118,
   "best_epoch": 22
 }

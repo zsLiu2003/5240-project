@@ -14,3 +14,6 @@ python code/train.py \
     --experiment from_scratch \
     --data-dir data \
     --results-dir results
+
+#main experiment
+python code/train.py --experiment main
