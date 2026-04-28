@@ -2,6 +2,8 @@
 Training script for ChemBERTa binding energy prediction
 """
 
+import argparse
+import copy
 import torch
 import torch.nn as nn
 import numpy as np
@@ -94,7 +96,7 @@ def train(config, seed=42):
     print(f'{"="*60}\n')
 
     # Create output directory
-    output_dir = Path(config.RESULTS_DIR) / f'main_method_seed{seed}'
+    output_dir = Path(config.RESULTS_DIR) / f'{config.EXPERIMENT_NAME}_seed{seed}'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load data
@@ -167,7 +169,7 @@ def train(config, seed=42):
         # Save best model
         if val_metrics['RMSE'] < best_val_rmse:
             best_val_rmse = val_metrics['RMSE']
-            best_model_state = model.state_dict().copy()
+            best_model_state = copy.deepcopy(model.state_dict())
             if config.SAVE_MODEL:
                 torch.save(best_model_state, output_dir / 'best_model.pt')
             print(f'  → New best model (RMSE: {best_val_rmse:.4f})')
@@ -202,6 +204,8 @@ def train(config, seed=42):
         'config': {
             'model': config.MODEL_NAME,
             'freeze_encoder': bool(config.FREEZE_ENCODER),
+            'from_scratch': bool(config.FROM_SCRATCH),
+            'experiment_name': config.EXPERIMENT_NAME,
             'batch_size': int(config.BATCH_SIZE),
             'learning_rate': float(config.LEARNING_RATE),
             'max_epochs': int(config.MAX_EPOCHS)
@@ -269,15 +273,66 @@ def train_all_seeds(config):
         'MAE': test_mae,
         'R2': test_r2
     })
-    summary_path = Path(config.RESULTS_DIR) / 'main_method_summary.csv'
+    summary_path = Path(config.RESULTS_DIR) / config.SUMMARY_FILENAME
     summary.to_csv(summary_path, index=False)
     print(f'\nSummary saved to {summary_path}')
 
     return all_results
 
 
-if __name__ == '__main__':
+def build_config_from_args():
+    parser = argparse.ArgumentParser(description='Train ChemBERTa regression experiments.')
+    parser.add_argument(
+        '--experiment',
+        choices=['main', 'full_finetune', 'from_scratch'],
+        default='main',
+        help='Experiment variant to run.'
+    )
+    parser.add_argument('--data-dir', default=None, help='Directory containing split_seed*.csv files.')
+    parser.add_argument('--results-dir', default=None, help='Directory for output results.')
+    parser.add_argument('--max-epochs', type=int, default=None, help='Override max epochs.')
+    parser.add_argument('--batch-size', type=int, default=None, help='Override batch size.')
+    parser.add_argument('--lr', type=float, default=None, help='Override learning rate.')
+    parser.add_argument('--no-save-model', action='store_true', help='Do not save best_model.pt.')
+    args = parser.parse_args()
+
     config = Config()
+    if args.data_dir is not None:
+        config.DATA_DIR = args.data_dir
+    if args.results_dir is not None:
+        config.RESULTS_DIR = args.results_dir
+    if args.max_epochs is not None:
+        config.MAX_EPOCHS = args.max_epochs
+    if args.batch_size is not None:
+        config.BATCH_SIZE = args.batch_size
+    if args.no_save_model:
+        config.SAVE_MODEL = False
+
+    if args.experiment == 'main':
+        config.EXPERIMENT_NAME = 'main_method'
+        config.SUMMARY_FILENAME = 'main_method_summary.csv'
+        config.FREEZE_ENCODER = True
+        config.FROM_SCRATCH = False
+        if args.lr is not None:
+            config.LEARNING_RATE = args.lr
+    elif args.experiment == 'full_finetune':
+        config.EXPERIMENT_NAME = 'ablation1_full_finetune'
+        config.SUMMARY_FILENAME = 'ablation1_full_finetune_results.csv'
+        config.FREEZE_ENCODER = False
+        config.FROM_SCRATCH = False
+        config.LEARNING_RATE = args.lr if args.lr is not None else 2e-5
+    elif args.experiment == 'from_scratch':
+        config.EXPERIMENT_NAME = 'ablation2_from_scratch'
+        config.SUMMARY_FILENAME = 'ablation2_from_scratch_results.csv'
+        config.FREEZE_ENCODER = False
+        config.FROM_SCRATCH = True
+        config.LEARNING_RATE = args.lr if args.lr is not None else 1e-4
+
+    return config
+
+
+if __name__ == '__main__':
+    config = build_config_from_args()
     print('Configuration:')
     print(config)
 

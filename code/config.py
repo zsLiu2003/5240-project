@@ -10,7 +10,10 @@ class Config:
     # Model settings
     MODEL_NAME = 'seyonec/ChemBERTa-zinc-base-v1'  # HuggingFace model
     FREEZE_ENCODER = True  # Main method: freeze encoder
+    FROM_SCRATCH = False  # Ablation 2: random initialized encoder
     HIDDEN_SIZE = 768  # ChemBERTa hidden size
+    EXPERIMENT_NAME = 'main_method'
+    SUMMARY_FILENAME = 'main_method_summary.csv'
 
     # Regression head architecture
     HEAD_HIDDEN_DIM = 256

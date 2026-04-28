@@ -4,7 +4,7 @@ Model definition: ChemBERTa + Regression Head
 
 import torch
 import torch.nn as nn
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
 
 
 class RegressionHead(nn.Module):
@@ -43,8 +43,14 @@ class ChemBERTaRegressor(nn.Module):
         super().__init__()
         self.config = config
 
-        # Load pretrained ChemBERTa encoder
-        self.encoder = AutoModel.from_pretrained(config.MODEL_NAME)
+        # Load encoder. From-scratch ablation keeps the same architecture but
+        # intentionally discards pretrained weights.
+        if getattr(config, 'FROM_SCRATCH', False):
+            encoder_config = AutoConfig.from_pretrained(config.MODEL_NAME)
+            self.encoder = AutoModel.from_config(encoder_config)
+            print('Encoder randomly initialized (from-scratch mode)')
+        else:
+            self.encoder = AutoModel.from_pretrained(config.MODEL_NAME)
 
         # Freeze encoder if specified
         if config.FREEZE_ENCODER:
