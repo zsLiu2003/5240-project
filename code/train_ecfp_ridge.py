@@ -18,8 +18,14 @@ from config import Config
 
 
 ALPHAS = [0.01, 0.1, 1.0, 10.0, 100.0]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RDLogger.DisableLog('rdApp.warning')
 RDLogger.DisableLog('rdApp.error')
+
+
+def project_path(path):
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def mol_from_smiles(smiles):
@@ -65,7 +71,7 @@ def compute_metrics(targets, predictions):
 
 
 def train_one_seed(config, seed, output_dir):
-    csv_path = Path(config.DATA_DIR) / f'split_seed{seed}.csv'
+    csv_path = project_path(config.DATA_DIR) / f'split_seed{seed}.csv'
     if not csv_path.exists():
         raise FileNotFoundError(f'Split file not found: {csv_path}')
 
@@ -132,7 +138,7 @@ def main():
     if args.results_dir is not None:
         config.RESULTS_DIR = args.results_dir
 
-    output_dir = Path(config.RESULTS_DIR)
+    output_dir = project_path(config.RESULTS_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rows = [train_one_seed(config, seed, output_dir) for seed in config.SEEDS]

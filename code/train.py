@@ -18,6 +18,14 @@ from model import create_model
 from evaluate import evaluate, print_metrics
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def project_path(path):
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 class EarlyStopping:
     """Early stopping to stop training when validation loss doesn't improve"""
 
@@ -96,11 +104,11 @@ def train(config, seed=42):
     print(f'{"="*60}\n')
 
     # Create output directory
-    output_dir = Path(config.RESULTS_DIR) / f'{config.EXPERIMENT_NAME}_seed{seed}'
+    output_dir = project_path(config.RESULTS_DIR) / f'{config.EXPERIMENT_NAME}_seed{seed}'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load data
-    csv_path = Path(config.DATA_DIR) / f'split_seed{seed}.csv'
+    csv_path = project_path(config.DATA_DIR) / f'split_seed{seed}.csv'
     if not csv_path.exists():
         raise FileNotFoundError(f'Split file not found: {csv_path}')
 
@@ -273,7 +281,7 @@ def train_all_seeds(config):
         'MAE': test_mae,
         'R2': test_r2
     })
-    summary_path = Path(config.RESULTS_DIR) / config.SUMMARY_FILENAME
+    summary_path = project_path(config.RESULTS_DIR) / config.SUMMARY_FILENAME
     summary.to_csv(summary_path, index=False)
     print(f'\nSummary saved to {summary_path}')
 

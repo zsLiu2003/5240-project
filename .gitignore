@@ -1,3 +1,4 @@
 results/**/best_model.pt
 *.pt
 tmp_test_data/
+__pycache__/

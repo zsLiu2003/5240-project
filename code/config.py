@@ -4,8 +4,8 @@ Configuration file for ChemBERTa binding energy prediction
 
 class Config:
     # Data paths
-    DATA_DIR = '../data'
-    RESULTS_DIR = '../results'
+    DATA_DIR = 'data'
+    RESULTS_DIR = 'results'
 
     # Model settings
     MODEL_NAME = 'seyonec/ChemBERTa-zinc-base-v1'  # HuggingFace model
