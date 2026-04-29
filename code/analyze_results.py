@@ -78,6 +78,12 @@ def load_experiment_results(results_dir=None):
     if not main_seed_df.empty:
         data['Main Method'] = _summarize_metrics(main_seed_df, 'main_method_seed*/results.json')
 
+    aug_seed_df = _load_seed_result_dirs(results_dir, 'main_method_aug0.5')
+    if not aug_seed_df.empty:
+        data['Main + Aug (0.5)'] = _summarize_metrics(
+            aug_seed_df, 'main_method_aug0.5_seed*/results.json'
+        )
+
     # 自动加载增强实验结果（例如 main_method_aug0.5_summary.csv）
     for filepath in sorted(results_dir.glob('*_aug*_summary.csv')):
         df = pd.read_csv(filepath)
@@ -85,7 +91,7 @@ def load_experiment_results(results_dir=None):
             stem = filepath.stem.replace('_summary', '')
             if stem.startswith('main_method_aug'):
                 prob = stem.replace('main_method_aug', '')
-                name = f'Main + Aug ({prob})'
+                name = f'Main + Aug ({prob}, CV)' if 'fold' in df.columns else f'Main + Aug ({prob})'
             else:
                 name = stem.replace('_', ' ').title()
             data[name] = _summarize_metrics(df, filepath.name)
@@ -161,28 +167,24 @@ def analyze_augmentation(data):
     print('数据增强效果分析')
     print('='*90)
 
-    if 'Main Method' not in data:
-        print('Main Method结果未找到，无法分析增强效果')
-        return
-
-    baseline_rmse = data['Main Method']['rmse_mean']
-    print(f'\nBaseline (无增强): RMSE = {baseline_rmse:.4f}')
-
-    aug_results = []
-    for name in data.keys():
-        if 'Aug' in name:
-            aug_rmse = data[name]['rmse_mean']
+    comparisons = [
+        ('Main Method', 'Main + Aug (0.5)', '普通3-seed split'),
+        ('Main Method (CV)', 'Main + Aug (0.5, CV)', '5-fold CV'),
+    ]
+    found = False
+    for baseline_name, aug_name, protocol in comparisons:
+        if baseline_name in data and aug_name in data:
+            found = True
+            baseline_rmse = data[baseline_name]['rmse_mean']
+            aug_rmse = data[aug_name]['rmse_mean']
             improvement = ((baseline_rmse - aug_rmse) / baseline_rmse) * 100
-            aug_results.append((name, aug_rmse, improvement))
-            print(f'{name}: RMSE = {aug_rmse:.4f}, 改进 = {improvement:+.2f}%')
+            print(f'\n{protocol}:')
+            print(f'  Baseline: {baseline_name} RMSE = {baseline_rmse:.4f}')
+            print(f'  Augmented: {aug_name} RMSE = {aug_rmse:.4f}')
+            print(f'  RMSE改进: {improvement:+.2f}%')
 
-    if aug_results:
-        best = max(aug_results, key=lambda x: x[2])
-        print(f'\n最佳增强配置: {best[0]}')
-        print(f'  RMSE: {best[1]:.4f}')
-        print(f'  相对改进: {best[2]:+.2f}%')
-    else:
-        print('\n未找到增强实验结果')
+    if not found:
+        print('\n未找到可比的增强实验结果')
 
 
 def create_visualizations(data, output_dir=None):
@@ -233,7 +235,8 @@ def create_visualizations(data, output_dir=None):
         plt.close()
 
     # 2. 数据增强效果对比
-    aug_methods = ['Main Method'] + [k for k in data.keys() if 'Aug' in k]
+    aug_methods = ['Main Method', 'Main + Aug (0.5)',
+                   'Main Method (CV)', 'Main + Aug (0.5, CV)']
     aug_data = {k: v for k, v in data.items() if k in aug_methods}
 
     if len(aug_data) > 1:
@@ -308,18 +311,22 @@ def write_markdown_report(data, output_dir=None):
             f'- Compared with Stage2-only, the full two-stage method changes RMSE by {(stage2 - main) / main * 100:+.2f}%, isolating the value of learning a stable regression head before unfreezing the backbone.',
         ])
 
-    aug_keys = [k for k in data if 'Aug' in k]
-    if 'Main Method' in data and aug_keys:
-        baseline = data['Main Method']['rmse_mean']
-        best_key = min(aug_keys, key=lambda k: data[k]['rmse_mean'])
-        best_rmse = data[best_key]['rmse_mean']
-        lines.extend([
-            '',
-            '## Augmentation Interpretation',
-            '',
-            f'- Best augmentation setting: {best_key}, RMSE {best_rmse:.4f}.',
-            f'- Relative to the non-augmented main method, this is {(baseline - best_rmse) / baseline * 100:+.2f}% RMSE change.',
-        ])
+    aug_lines = []
+    for baseline_name, aug_name, protocol in [
+        ('Main Method', 'Main + Aug (0.5)', 'standard 3-seed split'),
+        ('Main Method (CV)', 'Main + Aug (0.5, CV)', '5-fold CV'),
+    ]:
+        if baseline_name in data and aug_name in data:
+            baseline = data[baseline_name]['rmse_mean']
+            aug_rmse = data[aug_name]['rmse_mean']
+            aug_lines.append(
+                f'- Under the {protocol} protocol, {aug_name} changes RMSE by '
+                f'{(baseline - aug_rmse) / baseline * 100:+.2f}% '
+                f'({baseline:.4f} -> {aug_rmse:.4f}).'
+            )
+
+    if aug_lines:
+        lines.extend(['', '## Augmentation Interpretation', ''] + aug_lines)
 
     report_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     print(f'分析报告已保存: {report_path}')
