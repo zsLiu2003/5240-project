@@ -45,12 +45,16 @@ class ChemBERTaRegressor(nn.Module):
 
         # Load encoder. From-scratch ablation keeps the same architecture but
         # intentionally discards pretrained weights.
+        model_kwargs = {}
+        if getattr(config, 'ATTN_IMPLEMENTATION', None) is not None:
+            model_kwargs['attn_implementation'] = config.ATTN_IMPLEMENTATION
+
         if getattr(config, 'FROM_SCRATCH', False):
-            encoder_config = AutoConfig.from_pretrained(config.MODEL_NAME)
+            encoder_config = AutoConfig.from_pretrained(config.MODEL_NAME, **model_kwargs)
             self.encoder = AutoModel.from_config(encoder_config)
             print('Encoder randomly initialized (from-scratch mode)')
         else:
-            self.encoder = AutoModel.from_pretrained(config.MODEL_NAME)
+            self.encoder = AutoModel.from_pretrained(config.MODEL_NAME, **model_kwargs)
 
         # Freeze encoder if specified
         if config.FREEZE_ENCODER:

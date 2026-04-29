@@ -468,6 +468,23 @@ def train_cv(config, n_folds=5):
     return all_results
 
 
+def train_cv_fold(config, seed, fold_idx, n_folds=5):
+    """Train exactly one CV fold and save that fold's normal output directory."""
+    csv_path = project_path(config.DATA_DIR) / f'split_seed{seed}.csv'
+    if not csv_path.exists():
+        raise FileNotFoundError(f'Split file not found: {csv_path}')
+
+    if fold_idx < 0 or fold_idx >= n_folds:
+        raise ValueError(f'fold_idx must be in [0, {n_folds - 1}], got {fold_idx}')
+
+    print(f'\n{"#"*60}')
+    print(f'Single CV fold: seed {seed}, fold {fold_idx}/{n_folds - 1}')
+    print(f'{"#"*60}')
+
+    dataloaders = create_cv_dataloaders(csv_path, config, seed, fold_idx, n_folds)
+    return train(config, seed, fold_idx=fold_idx, dataloaders=dataloaders)
+
+
 def build_config_from_args():
     parser = argparse.ArgumentParser(description='Train ChemBERTa regression experiments.')
     parser.add_argument(
@@ -486,6 +503,10 @@ def build_config_from_args():
     parser.add_argument('--no-save-model', action='store_true', help='Do not save best_model.pt.')
     parser.add_argument('--cv', action='store_true', help='Use K-fold cross-validation.')
     parser.add_argument('--cv-folds', type=int, default=5, help='Number of CV folds (default 5).')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Run a single seed. With --cv --fold, runs one CV fold.')
+    parser.add_argument('--fold', type=int, default=None,
+                        help='Run one CV fold index. Requires --cv and --seed.')
     parser.add_argument('--augment', action='store_true', help='Enable SMILES augmentation.')
     parser.add_argument('--aug-prob', type=float, default=0.5,
                         help='Augmentation probability (0.0-1.0, default 0.5).')
@@ -558,16 +579,24 @@ def build_config_from_args():
         config.EXPERIMENT_NAME = f'{config.EXPERIMENT_NAME}{suffix}'
         config.SUMMARY_FILENAME = f'{config.EXPERIMENT_NAME}_summary.csv'
 
-    return config
+    return config, args
 
 
 if __name__ == '__main__':
-    config = build_config_from_args()
+    config, args = build_config_from_args()
     print('Configuration:')
     print(config)
 
     # Train with CV or standard seeds
-    if config.USE_CV:
+    if args.fold is not None:
+        if not config.USE_CV:
+            raise ValueError('--fold requires --cv')
+        if args.seed is None:
+            raise ValueError('--fold requires --seed')
+        results = train_cv_fold(config, seed=args.seed, fold_idx=args.fold, n_folds=config.CV_FOLDS)
+    elif args.seed is not None:
+        results = train(config, seed=args.seed)
+    elif config.USE_CV:
         results = train_cv(config, n_folds=config.CV_FOLDS)
     else:
         results = train_all_seeds(config)
