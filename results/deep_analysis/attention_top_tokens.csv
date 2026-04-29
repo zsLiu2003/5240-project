@@ -1,0 +1,66 @@
+case_id,case_type,variant,SMILES,rank,token,attention_rollout
+cid_23718351_1,largest-error failure,original,[B-]OC.[Na+],1,OC,0.12202918215148784
+cid_23718351_1,largest-error failure,original,[B-]OC.[Na+],2,.,0.12170643692875267
+cid_23718351_1,largest-error failure,original,[B-]OC.[Na+],3,B,0.11850209678062129
+cid_23718351_1,largest-error failure,original,[B-]OC.[Na+],4,-],0.09658091537290375
+cid_23718351_1,largest-error failure,original,[B-]OC.[Na+],5,[,0.09082301003780119
+cid_140455213_2,halogen failure,original,[Li+].[O-]I,1,+],0.11894502875867821
+cid_140455213_2,halogen failure,original,[Li+].[O-]I,2,.,0.11472530310005435
+cid_140455213_2,halogen failure,original,[Li+].[O-]I,3,L,0.11060470340329048
+cid_140455213_2,halogen failure,original,[Li+].[O-]I,4,-],0.09894779801032687
+cid_140455213_2,halogen failure,original,[Li+].[O-]I,5,[,0.08450416544972258
+cid_140455213_2,halogen failure,randomized_1,I[O-].[Li+],1,-],0.12168274827597277
+cid_140455213_2,halogen failure,randomized_1,I[O-].[Li+],2,.,0.11326579136239243
+cid_140455213_2,halogen failure,randomized_1,I[O-].[Li+],3,L,0.09877258815199268
+cid_140455213_2,halogen failure,randomized_1,I[O-].[Li+],4,[,0.09349392679243256
+cid_140455213_2,halogen failure,randomized_1,I[O-].[Li+],5,i,0.0916330553175631
+cid_159330689_3,additional high-error failure,original,[BH3-]I.[Na+],1,-],0.10310458761633642
+cid_159330689_3,additional high-error failure,original,[BH3-]I.[Na+],2,I,0.09934841015923673
+cid_159330689_3,additional high-error failure,original,[BH3-]I.[Na+],3,.,0.09445023282164469
+cid_159330689_3,additional high-error failure,original,[BH3-]I.[Na+],4,3,0.08778113032172968
+cid_159330689_3,additional high-error failure,original,[BH3-]I.[Na+],5,B,0.08213741339901105
+cid_159330689_3,additional high-error failure,randomized_1,I[BH3-].[Na+],1,-],0.11386575995106156
+cid_159330689_3,additional high-error failure,randomized_1,I[BH3-].[Na+],2,.,0.09299313509177709
+cid_159330689_3,additional high-error failure,randomized_1,I[BH3-].[Na+],3,H,0.09025098760031992
+cid_159330689_3,additional high-error failure,randomized_1,I[BH3-].[Na+],4,3,0.08311849752632539
+cid_159330689_3,additional high-error failure,randomized_1,I[BH3-].[Na+],5,[,0.07425611572548968
+cid_58676901_4,additional high-error failure,original,[B][C-]=N.[Na+],1,=,0.12111476590409903
+cid_58676901_4,additional high-error failure,original,[B][C-]=N.[Na+],2,-],0.09338962653688643
+cid_58676901_4,additional high-error failure,original,[B][C-]=N.[Na+],3,B,0.08112786469632158
+cid_58676901_4,additional high-error failure,original,[B][C-]=N.[Na+],4,N,0.08011934670996682
+cid_58676901_4,additional high-error failure,original,[B][C-]=N.[Na+],5,.,0.07537716402696527
+cid_58676901_4,additional high-error failure,randomized_1,[C-](=N)[B].[Na+],1,)[,0.11218267058526128
+cid_58676901_4,additional high-error failure,randomized_1,[C-](=N)[B].[Na+],2,],0.08856371681145479
+cid_58676901_4,additional high-error failure,randomized_1,[C-](=N)[B].[Na+],3,(=,0.08478666144548608
+cid_58676901_4,additional high-error failure,randomized_1,[C-](=N)[B].[Na+],4,.,0.07711118985736108
+cid_58676901_4,additional high-error failure,randomized_1,[C-](=N)[B].[Na+],5,N,0.06949193713361146
+cid_22960788_5,additional high-error failure,original,CO[O-].[Na+],1,-],0.13013340115709848
+cid_22960788_5,additional high-error failure,original,CO[O-].[Na+],2,.,0.11093349960271878
+cid_22960788_5,additional high-error failure,original,CO[O-].[Na+],3,[,0.09602953603166078
+cid_22960788_5,additional high-error failure,original,CO[O-].[Na+],4,N,0.09367293381260648
+cid_22960788_5,additional high-error failure,original,CO[O-].[Na+],5,[,0.09051801570438904
+cid_22960788_5,additional high-error failure,randomized_1,O(C)[O-].[Na+],1,-],0.10567034658364825
+cid_22960788_5,additional high-error failure,randomized_1,O(C)[O-].[Na+],2,)[,0.10403135241043912
+cid_22960788_5,additional high-error failure,randomized_1,O(C)[O-].[Na+],3,.,0.08348076514146179
+cid_22960788_5,additional high-error failure,randomized_1,O(C)[O-].[Na+],4,(,0.08203753077874724
+cid_22960788_5,additional high-error failure,randomized_1,O(C)[O-].[Na+],5,a,0.07768244460347817
+cid_58627710_6,additional high-error failure,original,[B]=[N-].[K+],1,=[,0.11173623254976706
+cid_58627710_6,additional high-error failure,original,[B]=[N-].[K+],2,-],0.108561437728386
+cid_58627710_6,additional high-error failure,original,[B]=[N-].[K+],3,B,0.09703855160600809
+cid_58627710_6,additional high-error failure,original,[B]=[N-].[K+],4,N,0.08645900778062943
+cid_58627710_6,additional high-error failure,original,[B]=[N-].[K+],5,+],0.08428385272533531
+cid_58627710_6,additional high-error failure,randomized_1,[K+].[N-]=[B],1,N,0.11214608969937913
+cid_58627710_6,additional high-error failure,randomized_1,[K+].[N-]=[B],2,.,0.1097605318315772
+cid_58627710_6,additional high-error failure,randomized_1,[K+].[N-]=[B],3,B,0.1083226905983106
+cid_58627710_6,additional high-error failure,randomized_1,[K+].[N-]=[B],4,[,0.10346561371702648
+cid_58627710_6,additional high-error failure,randomized_1,[K+].[N-]=[B],5,-]=[,0.102422175126237
+cid_58604523_7,additional high-error failure,original,C[CH-]N.[Rb+],1,-],0.10847557248653063
+cid_58604523_7,additional high-error failure,original,C[CH-]N.[Rb+],2,.,0.10652186332652248
+cid_58604523_7,additional high-error failure,original,C[CH-]N.[Rb+],3,+],0.09327821282204643
+cid_58604523_7,additional high-error failure,original,C[CH-]N.[Rb+],4,N,0.09321683186811595
+cid_58604523_7,additional high-error failure,original,C[CH-]N.[Rb+],5,[,0.0858801524273707
+cid_129740401_8,low-error success contrast,original,Cl[I-]Cl.[K+],1,-],0.12632648967716276
+cid_129740401_8,low-error success contrast,original,Cl[I-]Cl.[K+],2,.,0.11296134619286227
+cid_129740401_8,low-error success contrast,original,Cl[I-]Cl.[K+],3,Cl,0.1113280681271423
+cid_129740401_8,low-error success contrast,original,Cl[I-]Cl.[K+],4,[,0.09491767704747256
+cid_129740401_8,low-error success contrast,original,Cl[I-]Cl.[K+],5,Cl,0.08958018166780128

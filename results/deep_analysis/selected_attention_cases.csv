@@ -1,0 +1,9 @@
+case_id,case_type,motivation,seed,CID,Formula,SMILES,true,pred_mean,pred_std,abs_error_mean,has_metal,has_halogen,has_formal_charge,has_oxygen
+cid_23718351_1,largest-error failure,Shows the strongest remaining limitation of the final method.,456,23718351,CH3BNaO,[B-]OC.[Na+],-2.8372433,-2.4792245399999997,0.054201263537375276,0.35801878,True,False,True,True
+cid_140455213_2,halogen failure,Tests whether heavy halogen-containing molecules remain difficult.,42,140455213,ILiO,[Li+].[O-]I,-2.3536925,-2.6489194599999997,0.05014972425061763,0.295226954,True,True,True,True
+cid_159330689_3,additional high-error failure,Adds coverage of the high-error tail.,456,159330689,BH3INa,[BH3-]I.[Na+],-2.5872622,-2.87917486,0.05970908036151605,0.2919127,True,True,True,False
+cid_58676901_4,additional high-error failure,Adds coverage of the high-error tail.,456,58676901,CHBNNa,[B][C-]=N.[Na+],-2.6941605,-2.9597092,0.05372475066591736,0.265548752,True,False,True,False
+cid_22960788_5,additional high-error failure,Adds coverage of the high-error tail.,123,22960788,CH3NaO2,CO[O-].[Na+],-2.8260872,-2.5634559,0.028492314552700133,0.262631324,True,False,True,True
+cid_58627710_6,additional high-error failure,Adds coverage of the high-error tail.,456,58627710,BKN,[B]=[N-].[K+],-2.4553761,-2.7029639,0.00940381893966502,0.24758777599999998,True,False,True,False
+cid_58604523_7,additional high-error failure,Adds coverage of the high-error tail.,42,58604523,C2H6NRb,C[CH-]N.[Rb+],-3.1476333,-2.91725946,0.03944761943993598,0.23037385999999999,True,False,True,False
+cid_129740401_8,low-error success contrast,Provides a contrast case showing that not all ionic or unusual molecules fail.,42,129740401,Cl2IK,Cl[I-]Cl.[K+],-2.3511686,-2.3305821,0.020961536431521384,0.0217225076214,True,True,True,False
