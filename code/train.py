@@ -4,6 +4,7 @@ Training script for ChemBERTa binding energy prediction
 
 import argparse
 import copy
+import random
 import torch
 import torch.nn as nn
 import numpy as np
@@ -169,6 +170,8 @@ def train(config, seed=42, fold_idx=None, dataloaders=None):
     # Set random seeds
     torch.manual_seed(seed)
     np.random.seed(seed)
+    random.seed(seed)
+    config.AUGMENTATION_SEED = seed
 
     print(f'\n{"="*60}')
     if fold_idx is not None:
@@ -336,6 +339,8 @@ def train(config, seed=42, fold_idx=None, dataloaders=None):
             'freeze_encoder': bool(config.FREEZE_ENCODER),
             'from_scratch': bool(config.FROM_SCRATCH),
             'two_stage': bool(config.TWO_STAGE),
+            'augment_smiles': bool(config.AUGMENT_SMILES),
+            'augmentation_prob': float(config.AUGMENTATION_PROB),
             'experiment_name': config.EXPERIMENT_NAME,
             'batch_size': int(config.BATCH_SIZE),
             'learning_rate': float(config.LEARNING_RATE),
@@ -481,6 +486,9 @@ def build_config_from_args():
     parser.add_argument('--no-save-model', action='store_true', help='Do not save best_model.pt.')
     parser.add_argument('--cv', action='store_true', help='Use K-fold cross-validation.')
     parser.add_argument('--cv-folds', type=int, default=5, help='Number of CV folds (default 5).')
+    parser.add_argument('--augment', action='store_true', help='Enable SMILES augmentation.')
+    parser.add_argument('--aug-prob', type=float, default=0.5,
+                        help='Augmentation probability (0.0-1.0, default 0.5).')
     args = parser.parse_args()
 
     config = Config()
@@ -498,6 +506,9 @@ def build_config_from_args():
         config.STAGE2_UNFREEZE_LAYERS = args.unfreeze_layers
     config.USE_CV = args.cv
     config.CV_FOLDS = args.cv_folds
+
+    if not 0.0 <= args.aug_prob <= 1.0:
+        raise ValueError(f'--aug-prob must be in [0, 1], got {args.aug_prob}')
 
     if args.experiment == 'main':
         config.EXPERIMENT_NAME = 'main_method'
@@ -539,6 +550,13 @@ def build_config_from_args():
         config.FROM_SCRATCH = True
         config.TWO_STAGE = False
         config.LEARNING_RATE = args.lr if args.lr is not None else 1e-4
+
+    if args.augment:
+        config.AUGMENT_SMILES = True
+        config.AUGMENTATION_PROB = args.aug_prob
+        suffix = f'_aug{args.aug_prob:g}'
+        config.EXPERIMENT_NAME = f'{config.EXPERIMENT_NAME}{suffix}'
+        config.SUMMARY_FILENAME = f'{config.EXPERIMENT_NAME}_summary.csv'
 
     return config
 

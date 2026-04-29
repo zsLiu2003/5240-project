@@ -9,6 +9,8 @@ code/
 ├── model.py            # 模型定义
 ├── evaluate.py         # 评估函数
 ├── train.py            # 训练主脚本
+├── smiles_augmentation.py # SMILES随机等价表示增强
+├── analyze_results.py  # 消融/增强实验汇总与报告
 ├── test_local.py       # 本地测试（不需要 GPU）
 └── README.md           # 本文件
 ```
@@ -52,10 +54,28 @@ python test_local.py
 ### 3. 在 GPU 环境训练
 
 ```bash
-# 单个 seed
-python train.py
+cd /hdd2/zesen/daily/5240/5240-project
 
-# 或者修改 config.py 中的 SEEDS 列表
+# 主方法：两阶段监督训练
+python code/train.py --experiment main --data-dir data --results-dir results
+
+# 消融：只训练head，不做Stage 2
+python code/train.py --experiment stage1_only --data-dir data --results-dir results
+
+# 消融：跳过head warm-up，直接微调encoder/head
+python code/train.py --experiment stage2_only --data-dir data --results-dir results
+
+# 对照：标准full fine-tuning
+python code/train.py --experiment full_finetune --data-dir data --results-dir results
+
+# 对照：随机初始化encoder
+python code/train.py --experiment from_scratch --data-dir data --results-dir results
+
+# 增强实验：训练集on-the-fly随机SMILES
+python code/train.py --experiment main --augment --aug-prob 0.5 --data-dir data --results-dir results
+
+# 汇总分析与可视化
+python code/analyze_results.py
 ```
 
 ## 配置说明
@@ -78,6 +98,17 @@ python train.py
 - `LABEL_COL`: 标签列名（默认 'Energy_min'）
 - `SMILES_COL`: SMILES 列名
 - `MAX_LENGTH`: SMILES 最大 token 长度
+- `AUGMENT_SMILES`: 只在训练集启用SMILES随机化
+- `AUGMENTATION_PROB`: 每次读取训练样本时替换为随机等价SMILES的概率
+
+## 方法设计
+
+主方法是两阶段 supervised regression：
+
+1. Stage 1 冻结ChemBERTa encoder，只训练regression head。这个阶段把预训练分子表示映射到当前任务的binding energy尺度，降低小数据集上直接微调全部参数的不稳定性。
+2. Stage 2 解冻encoder，并对head/backbone使用不同学习率。head保持较快适配，backbone用更小学习率做任务相关调整，避免破坏预训练化学表示。
+
+SMILES增强只作用于训练集：同一分子的不同合法SMILES共享同一个能量标签。这样不会改变监督信号，而是要求模型对SMILES文本序列的等价重写保持一致，有助于检验模型是否学习分子结构而不是记忆单一字符串表示。
 
 ## 输出文件
 
@@ -89,7 +120,9 @@ python train.py
 ├── predictions.csv       # 测试集预测结果
 └── best_model.pt         # 最佳模型权重
 
-../results/main_method_summary.csv  # 所有 seed 的汇总结果
+../results/main_method_summary.csv       # 所有seed或CV fold汇总
+../results/main_method_aug0.5_summary.csv # 增强实验汇总，概率写入文件名避免覆盖
+../results/experiment_analysis.md        # analyze_results.py生成的方法与结果说明
 ```
 
 ## 修改为 Ablation 实验
@@ -153,5 +186,5 @@ A: 设置 `config.VERBOSE = True`
 训练完成后：
 1. 查看 `results.json` 了解训练历史
 2. 查看 `predictions.csv` 分析预测结果
-3. 用 `main_method_summary.csv` 报告 3-seed 平均结果
-4. 重复相同流程训练 baseline 和 ablation 模型
+3. 用 `main_method_summary.csv` 报告seed或CV平均结果
+4. 运行 `python code/analyze_results.py` 生成 `experiment_analysis.md`、`ablation_comparison.png` 和 `augmentation_comparison.png`

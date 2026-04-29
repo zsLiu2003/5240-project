@@ -44,6 +44,11 @@ class Config:
     USE_CV = False  # Use K-fold cross-validation
     CV_FOLDS = 5  # Number of CV folds
 
+    # Data augmentation settings
+    AUGMENT_SMILES = False  # Enable SMILES augmentation
+    AUGMENTATION_PROB = 0.5  # Augmentation probability (0.0-1.0)
+    AUGMENTATION_SEED = 42  # Seed for on-the-fly randomized SMILES
+
     # Label settings
     LABEL_COL = 'Energy_min'  # Use strongest binding energy
     SMILES_COL = 'SMILES'

@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset, Subset
 from transformers import AutoTokenizer
 import numpy as np
+import random
 from sklearn.model_selection import KFold
 
 
@@ -15,7 +16,7 @@ class BindingEnergyDataset(Dataset):
     Dataset for SMILES -> Binding Energy regression
     """
 
-    def __init__(self, csv_path, tokenizer, config, split='train'):
+    def __init__(self, csv_path, tokenizer, config, split='train', seed=42):
         """
         Args:
             csv_path: Path to CSV file with columns [SMILES, Energy_min, split]
@@ -26,6 +27,9 @@ class BindingEnergyDataset(Dataset):
         self.config = config
         self.tokenizer = tokenizer
         self.split = split
+        self.augmentation_rng = random.Random(
+            int(getattr(config, 'AUGMENTATION_SEED', seed)) + {'train': 0, 'val': 1, 'test': 2}.get(split, 0)
+        )
 
         # Load data
         df = pd.read_csv(csv_path)
@@ -50,6 +54,9 @@ class BindingEnergyDataset(Dataset):
         print(f'  Label range: [{self.labels.min():.3f}, {self.labels.max():.3f}]')
         if split == 'train':
             print(f'  Label mean: {self.label_mean:.3f}, std: {self.label_std:.3f}')
+            if getattr(self.config, 'AUGMENT_SMILES', False):
+                print(f'  SMILES augmentation: on-the-fly randomization '
+                      f'(p={getattr(self.config, "AUGMENTATION_PROB", 0.5):.2f})')
 
     def set_label_stats(self, mean, std):
         """Set label normalization stats from training set"""
@@ -68,6 +75,15 @@ class BindingEnergyDataset(Dataset):
         """
         smiles = self.smiles[idx]
         label = self.labels[idx]
+
+        # Data augmentation (only for training set)
+        if self.split == 'train' and getattr(self.config, 'AUGMENT_SMILES', False):
+            from smiles_augmentation import augment_smiles
+            smiles = augment_smiles(
+                smiles,
+                augmentation_prob=getattr(self.config, 'AUGMENTATION_PROB', 0.5),
+                rng=self.augmentation_rng,
+            )
 
         # Tokenize SMILES
         encoding = self.tokenizer(
@@ -108,9 +124,9 @@ def create_dataloaders(csv_path, config, seed=42):
     tokenizer = AutoTokenizer.from_pretrained(config.MODEL_NAME)
 
     # Create datasets
-    train_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='train')
-    val_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='val')
-    test_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='test')
+    train_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='train', seed=seed)
+    val_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='val', seed=seed)
+    test_dataset = BindingEnergyDataset(csv_path, tokenizer, config, split='test', seed=seed)
 
     # Set label stats for val/test from training set
     label_stats = {
