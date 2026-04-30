@@ -9,14 +9,6 @@ Attention rollout is used as qualitative evidence for how the final model proces
 | case_id | case_type | figure |
 | --- | --- | --- |
 | all_selected_cases | combined overview | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/attention_overview_all_cases.png |
-| cid_23718351_1 | largest-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_23718351_1.png |
-| cid_140455213_2 | halogen failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_140455213_2.png |
-| cid_159330689_3 | additional high-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_159330689_3.png |
-| cid_58676901_4 | additional high-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_58676901_4.png |
-| cid_22960788_5 | additional high-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_22960788_5.png |
-| cid_58627710_6 | additional high-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_58627710_6.png |
-| cid_58604523_7 | additional high-error failure | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_58604523_7.png |
-| cid_129740401_8 | low-error success contrast | /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_129740401_8.png |
 
 ## Top-attended Tokens
 

@@ -12,7 +12,8 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from matplotlib.patches import Rectangle
 from pathlib import Path
 import json
 
@@ -20,16 +21,69 @@ import json
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+COLORS = {
+    'ink': '#26313B',
+    'axis': '#3E4650',
+    'grid': '#E8ECF0',
+    'neutral': '#BFC7CF',
+    'neutral_light': '#E9EDF2',
+    'violet': '#8E8BFE',
+    'coral': '#E88482',
+    'heatmap_low': '#8EC9F2',
+    'heatmap_high': '#F2A0A1',
+}
+
+
+def _apply_paper_style():
+    plt.rcParams.update({
+        'font.family': 'DejaVu Sans',
+        'font.size': 8,
+        'axes.titlesize': 9,
+        'axes.labelsize': 8,
+        'xtick.labelsize': 7,
+        'ytick.labelsize': 7,
+        'axes.titleweight': 'normal',
+        'axes.labelweight': 'normal',
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+        'savefig.facecolor': 'white',
+        'axes.edgecolor': COLORS['axis'],
+        'text.color': COLORS['ink'],
+        'axes.labelcolor': COLORS['axis'],
+        'xtick.color': COLORS['axis'],
+        'ytick.color': COLORS['axis'],
+    })
+
+
 def _style_axis(ax, grid_axis='y'):
-    ax.set_facecolor('#fbfbf8')
-    ax.grid(axis=grid_axis, color='#d6d3cb', linewidth=0.7, alpha=0.7)
-    ax.spines[['top', 'right', 'left']].set_visible(False)
-    ax.tick_params(length=0, colors='#667085')
+    ax.set_facecolor('white')
+    ax.grid(axis=grid_axis, color=COLORS['grid'], linewidth=0.6, alpha=1.0)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.spines[['left', 'bottom']].set_color(COLORS['axis'])
+    ax.spines[['left', 'bottom']].set_linewidth(0.6)
+    ax.tick_params(length=2.5, width=0.6, colors=COLORS['axis'])
 
 
 def _method_palette(methods):
-    colors = ['#607d8b', '#8d7b68', '#7a8f75', '#8b8996', '#6f8f9f', '#9a8f6f', '#778899']
-    return {method: colors[idx % len(colors)] for idx, method in enumerate(methods)}
+    preferred = {
+        'Aug + Two-stage': COLORS['violet'],
+        'Main + Aug (0.5, CV)': COLORS['violet'],
+        'Main + Aug (0.5)': COLORS['violet'],
+        'No Aug + Two-stage': COLORS['coral'],
+        'Main Method (CV)': COLORS['coral'],
+        'Main Method': COLORS['coral'],
+        'Aug + Stage1-only': COLORS['coral'],
+        'Ablation Stage1 Only Aug0.5': COLORS['coral'],
+        'Stage1-only': COLORS['coral'],
+        'Aug + Stage2-only': COLORS['violet'],
+        'Ablation Stage2 Only Aug0.5': COLORS['violet'],
+        'Stage2-only': COLORS['violet'],
+        'ECFP + Ridge': COLORS['coral'],
+        'Full Finetune': COLORS['violet'],
+        'From Scratch': COLORS['coral'],
+    }
+    fallback = [COLORS['violet'], COLORS['coral']]
+    return {method: preferred.get(method, fallback[idx % len(fallback)]) for idx, method in enumerate(methods)}
 
 
 def _metric_dataframe(data):
@@ -244,9 +298,16 @@ def create_visualizations(data, output_dir=None):
 
             x = np.arange(len(methods))
             bars = ax.bar(x, means, yerr=stds, capsize=5, alpha=0.8,
-                         color=['#6c757d', '#3498db', '#9b59b6', '#e74c3c',
-                                '#f39c12', '#2ecc71', '#1abc9c'][:len(methods)],
-                         edgecolor='black', linewidth=1.5)
+                         color=[
+                             COLORS['coral'],
+                             COLORS['violet'],
+                             COLORS['coral'],
+                             COLORS['violet'],
+                             COLORS['coral'],
+                             COLORS['violet'],
+                             COLORS['coral'],
+                         ][:len(methods)],
+                         edgecolor='white', linewidth=1.0)
 
             ax.set_xticks(x)
             ax.set_xticklabels(methods, rotation=15, ha='right', fontsize=9)
@@ -277,9 +338,9 @@ def create_visualizations(data, output_dir=None):
         rmse_stds = [0.0 if np.isnan(aug_data[m]['rmse_std']) else aug_data[m]['rmse_std'] for m in methods]
 
         x = np.arange(len(methods))
-        colors = ['#2ecc71'] + ['#3498db'] * (len(methods) - 1)
+        colors = [COLORS['violet'] if 'Aug' in method else COLORS['coral'] for method in methods]
         bars = ax.bar(x, rmse_means, yerr=rmse_stds, capsize=5, alpha=0.8,
-                     color=colors, edgecolor='black', linewidth=1.5)
+                     color=colors, edgecolor='white', linewidth=1.0)
 
         ax.set_xticks(x)
         ax.set_xticklabels(methods, rotation=15, ha='right')
@@ -299,6 +360,7 @@ def create_visualizations(data, output_dir=None):
 
 def create_research_visualizations(data, output_dir=None):
     """Generate publication-style figures for pre-deep-analysis experiment results."""
+    _apply_paper_style()
     results_dir = Path(output_dir) if output_dir is not None else PROJECT_ROOT / 'results'
     figures_dir = results_dir / 'figures'
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -316,29 +378,6 @@ def create_research_visualizations(data, output_dir=None):
         figure_rows.append({
             'figure': str(_plot_cv_rmse_heatmap(cv_df, figures_dir)),
             'description': 'RMSE heatmap across seeds and folds for the four final CV experiments.',
-        })
-        figure_rows.append({
-            'figure': str(_plot_cv_metric_ranking(cv_df, figures_dir)),
-            'description': 'Distribution of CV fold metrics before deep-analysis interpretation.',
-        })
-
-    predictions = _load_representative_predictions(results_dir)
-    if not predictions.empty:
-        figure_rows.append({
-            'figure': str(_plot_prediction_scatter(predictions, figures_dir)),
-            'description': 'True-vs-predicted scatter for representative pre-deep-analysis methods.',
-        })
-        figure_rows.append({
-            'figure': str(_plot_residual_distribution(predictions, figures_dir)),
-            'description': 'Residual and absolute-error distributions for representative methods.',
-        })
-
-    robustness_path = results_dir / 'smiles_robustness_probe' / 'smiles_robustness_summary.csv'
-    if robustness_path.exists():
-        robustness_df = pd.read_csv(robustness_path)
-        figure_rows.append({
-            'figure': str(_plot_smiles_robustness_summary(robustness_df, figures_dir)),
-            'description': 'SMILES robustness probe before deep-analysis case selection.',
         })
 
     index = pd.DataFrame(figure_rows)
@@ -359,8 +398,8 @@ def _plot_experiment_metric_overview(metrics_df, figures_dir):
     methods = metrics_df['method'].tolist()
     colors = _method_palette(methods)
 
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, max(4.2, len(methods) * 0.36)), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, max(3.6, len(methods) * 0.30)), constrained_layout=True)
+    fig.patch.set_facecolor('white')
     for ax, metric, title in zip(
         axes,
         ['RMSE', 'MAE', 'R2'],
@@ -375,8 +414,8 @@ def _plot_experiment_metric_overview(metrics_df, figures_dir):
             xerr=stds,
             fmt='o',
             markersize=4.5,
-            color='#252a31',
-            ecolor='#87949a',
+            color=COLORS['ink'],
+            ecolor='#7C8791',
             elinewidth=1.0,
             capsize=2.5,
             zorder=3,
@@ -385,7 +424,7 @@ def _plot_experiment_metric_overview(metrics_df, figures_dir):
         ax.set_yticks(y)
         ax.set_yticklabels(methods if ax is axes[0] else [])
         ax.invert_yaxis()
-        ax.set_title(title, loc='left', fontweight='bold')
+        ax.set_title(title, loc='left')
         _style_axis(ax, grid_axis='x')
     path = figures_dir / 'experiment_metric_overview.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
@@ -418,24 +457,56 @@ def _plot_cv_rmse_heatmap(cv_df, figures_dir):
     method_order = ['No Aug + Two-stage', 'Aug + Two-stage', 'Aug + Stage1-only', 'Aug + Stage2-only']
     matrix = cv_df.pivot(index='method', columns='run', values='RMSE').reindex(index=method_order, columns=run_order)
 
-    cmap = LinearSegmentedColormap.from_list('rmse_muted', ['#f2f0e8', '#9fb3b2', '#2f4b5c'])
-    fig, ax = plt.subplots(figsize=(12.5, 3.8), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
-    im = ax.imshow(matrix.to_numpy(), cmap=cmap, aspect='auto')
+    z_matrix = (matrix - matrix.stack().mean()) / matrix.stack().std()
+    vmax = max(1.0, np.nanpercentile(np.abs(z_matrix.to_numpy()), 96))
+    cmap = LinearSegmentedColormap.from_list(
+        'light_sky_white_red',
+        [(0.0, COLORS['heatmap_low']), (0.5, '#FFFFFF'), (1.0, COLORS['heatmap_high'])],
+    )
+    cmap.set_bad('#FFFFFF')
+    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+    fig, ax = plt.subplots(figsize=(11.2, 3.2), constrained_layout=True)
+    fig.patch.set_facecolor('white')
+    im = ax.imshow(z_matrix.to_numpy(), cmap=cmap, norm=norm, aspect='auto')
     ax.set_yticks(np.arange(len(matrix.index)))
     ax.set_yticklabels(matrix.index)
     ax.set_xticks(np.arange(len(matrix.columns)))
     ax.set_xticklabels(matrix.columns, rotation=45, ha='right')
-    ax.set_title('Cross-validation RMSE by seed and fold', loc='left', fontweight='bold')
-    ax.tick_params(length=0, colors='#667085')
+    ax.set_title('Cross-validation RMSE by seed and fold', loc='left')
+    ax.tick_params(length=0, colors=COLORS['axis'])
     ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+    highlight_threshold = np.nanpercentile(np.abs(z_matrix.to_numpy()), 90)
     for row_idx in range(matrix.shape[0]):
         for col_idx in range(matrix.shape[1]):
             value = matrix.iloc[row_idx, col_idx]
-            ax.text(col_idx, row_idx, f'{value:.3f}', ha='center', va='center', fontsize=6.5, color='#1f2933')
+            z_value = z_matrix.iloc[row_idx, col_idx]
+            label = f'{value:.3f}'
+            if np.isfinite(z_value) and abs(z_value) >= highlight_threshold:
+                ax.add_patch(Rectangle(
+                    (col_idx - 0.5, row_idx - 0.5),
+                    1,
+                    1,
+                    fill=False,
+                    edgecolor=COLORS['ink'],
+                    linewidth=0.45,
+                    alpha=0.55,
+                ))
+                label = f'{value:.3f}\nz={z_value:+.1f}'
+            ax.text(
+                col_idx,
+                row_idx,
+                label,
+                ha='center',
+                va='center',
+                fontsize=5.6 if '\n' in label else 6.2,
+                color=COLORS['ink'],
+                linespacing=0.9,
+            )
     cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.01)
-    cbar.set_label('RMSE', fontsize=8, color='#4b5563')
-    cbar.ax.tick_params(labelsize=7, colors='#667085', length=2)
+    cbar.set_label('Color: RMSE z-score', fontsize=7, color=COLORS['axis'])
+    cbar.set_ticks([-vmax, 0, vmax])
+    cbar.set_ticklabels([f'{-vmax:.1f}', '0', f'{vmax:.1f}'])
+    cbar.ax.tick_params(labelsize=7, colors=COLORS['axis'], length=2)
     path = figures_dir / 'cv_rmse_heatmap.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -445,18 +516,18 @@ def _plot_cv_rmse_heatmap(cv_df, figures_dir):
 def _plot_cv_metric_ranking(cv_df, figures_dir):
     methods = ['No Aug + Two-stage', 'Aug + Two-stage', 'Aug + Stage1-only', 'Aug + Stage2-only']
     colors = _method_palette(methods)
-    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.2), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.5), constrained_layout=True)
+    fig.patch.set_facecolor('white')
     rng = np.random.default_rng(5240)
     for ax, metric, title in zip(axes, ['RMSE', 'MAE', 'R2'], ['RMSE', 'MAE', 'R2']):
         for idx, method in enumerate(methods):
             values = cv_df.loc[cv_df['method'] == method, metric].to_numpy()
             jitter = rng.normal(0, 0.045, size=len(values))
             ax.scatter(np.full(len(values), idx) + jitter, values, s=16, alpha=0.45, color=colors[method], edgecolor='none')
-            ax.plot(idx, values.mean(), marker='D', color='#252a31', markersize=5)
+            ax.plot(idx, values.mean(), marker='D', color=COLORS['ink'], markersize=4.2)
         ax.set_xticks(np.arange(len(methods)))
         ax.set_xticklabels(methods, rotation=35, ha='right')
-        ax.set_title(title, loc='left', fontweight='bold')
+        ax.set_title(title, loc='left')
         _style_axis(ax)
     path = figures_dir / 'cv_metric_distribution.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
@@ -490,15 +561,15 @@ def _plot_prediction_scatter(predictions, figures_dir):
     colors = _method_palette(methods)
     cols = min(3, len(methods))
     rows = int(np.ceil(len(methods) / cols))
-    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 3.8 * rows), squeeze=False, constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(rows, cols, figsize=(3.7 * cols, 3.3 * rows), squeeze=False, constrained_layout=True)
+    fig.patch.set_facecolor('white')
     vmin = min(predictions['true'].min(), predictions['pred'].min())
     vmax = max(predictions['true'].max(), predictions['pred'].max())
     for ax, method in zip(axes.ravel(), methods):
         df = predictions[predictions['method'] == method]
         ax.scatter(df['true'], df['pred'], s=14, alpha=0.45, color=colors[method], edgecolor='none')
-        ax.plot([vmin, vmax], [vmin, vmax], color='#3f3a35', linewidth=1.0)
-        ax.set_title(method, loc='left', fontsize=10, fontweight='bold')
+        ax.plot([vmin, vmax], [vmin, vmax], color=COLORS['axis'], linewidth=0.8)
+        ax.set_title(method, loc='left', fontsize=8.5)
         ax.set_xlabel('True energy')
         ax.set_ylabel('Predicted energy')
         _style_axis(ax)
@@ -513,14 +584,14 @@ def _plot_prediction_scatter(predictions, figures_dir):
 def _plot_residual_distribution(predictions, figures_dir):
     methods = predictions['method'].drop_duplicates().tolist()
     colors = _method_palette(methods)
-    fig, axes = plt.subplots(1, 2, figsize=(11.8, 4.4), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 3.8), constrained_layout=True)
+    fig.patch.set_facecolor('white')
     bins = np.linspace(predictions['error'].min(), predictions['error'].max(), 30)
     for method in methods:
         df = predictions[predictions['method'] == method]
         axes[0].hist(df['error'], bins=bins, histtype='step', linewidth=1.6, color=colors[method], label=method)
-    axes[0].axvline(0, color='#3f3a35', linewidth=0.9)
-    axes[0].set_title('Residual distribution', loc='left', fontweight='bold')
+    axes[0].axvline(0, color=COLORS['axis'], linewidth=0.8)
+    axes[0].set_title('Residual distribution', loc='left')
     axes[0].set_xlabel('Prediction error')
     axes[0].set_ylabel('Count')
     axes[0].legend(frameon=False, fontsize=7)
@@ -532,11 +603,11 @@ def _plot_residual_distribution(predictions, figures_dir):
         body.set_edgecolor('none')
         body.set_alpha(0.42)
     for key in ['cmedians', 'cbars', 'cmins', 'cmaxes']:
-        parts[key].set_color('#252a31')
+        parts[key].set_color(COLORS['ink'])
         parts[key].set_linewidth(1.0)
     axes[1].set_xticks(np.arange(1, len(methods) + 1))
     axes[1].set_xticklabels(methods, rotation=35, ha='right')
-    axes[1].set_title('Absolute-error distribution', loc='left', fontweight='bold')
+    axes[1].set_title('Absolute-error distribution', loc='left')
     axes[1].set_ylabel('Absolute error')
     for ax in axes:
         _style_axis(ax)
@@ -549,17 +620,17 @@ def _plot_residual_distribution(predictions, figures_dir):
 def _plot_smiles_robustness_summary(robustness_df, figures_dir):
     methods = robustness_df['model'].tolist()
     colors = _method_palette(methods)
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.0), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.4), constrained_layout=True)
+    fig.patch.set_facecolor('white')
     y = np.arange(len(methods))
 
-    axes[0].barh(y - 0.17, robustness_df['original_RMSE'], height=0.32, color='#9fb3b2', label='Original')
-    axes[0].barh(y + 0.17, robustness_df['randomized_RMSE'], height=0.32, color='#607d8b', label='Randomized')
+    axes[0].barh(y - 0.17, robustness_df['original_RMSE'], height=0.32, color=COLORS['coral'], label='Original')
+    axes[0].barh(y + 0.17, robustness_df['randomized_RMSE'], height=0.32, color=COLORS['violet'], label='Randomized')
     axes[0].set_yticks(y)
     axes[0].set_yticklabels(methods)
     axes[0].invert_yaxis()
     axes[0].set_xlabel('RMSE')
-    axes[0].set_title('Original vs randomized SMILES RMSE', loc='left', fontweight='bold')
+    axes[0].set_title('Original vs randomized SMILES RMSE', loc='left')
     axes[0].legend(frameon=False, fontsize=8)
 
     axes[1].barh(y, robustness_df['mean_prediction_std_across_variants'], color=[colors[m] for m in methods])
@@ -567,9 +638,9 @@ def _plot_smiles_robustness_summary(robustness_df, figures_dir):
     axes[1].set_yticklabels([])
     axes[1].invert_yaxis()
     axes[1].set_xlabel('Mean prediction std across variants')
-    axes[1].set_title('Representation sensitivity', loc='left', fontweight='bold')
+    axes[1].set_title('Representation sensitivity', loc='left')
     for idx, value in enumerate(robustness_df['mean_prediction_std_across_variants']):
-        axes[1].text(value + 0.003, idx, f'{value:.3f}', va='center', fontsize=8, color='#4b5563')
+        axes[1].text(value + 0.003, idx, f'{value:.3f}', va='center', fontsize=8, color=COLORS['axis'])
 
     for ax in axes:
         _style_axis(ax, grid_axis='x')
@@ -666,8 +737,7 @@ def main():
     # 数据增强分析
     analyze_augmentation(data)
 
-    # 生成可视化
-    create_visualizations(data)
+    # 生成核心可视化
     create_research_visualizations(data)
     write_markdown_report(data)
 

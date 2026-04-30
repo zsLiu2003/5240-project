@@ -19,9 +19,10 @@ os.environ.setdefault('MPLCONFIGDIR', '/tmp/matplotlib-ceng5240')
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from matplotlib.cm import ScalarMappable
 from matplotlib.patches import Rectangle
+from scipy.cluster.hierarchy import dendrogram, linkage
 import numpy as np
 import pandas as pd
 import torch
@@ -36,6 +37,39 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = PROJECT_ROOT / 'results'
 OUTPUT_DIR = RESULTS_DIR / 'deep_analysis'
 FIGURES_DIR = OUTPUT_DIR / 'figures'
+
+COLORS = {
+    'ink': '#26313B',
+    'axis': '#3E4650',
+    'grid': '#E8ECF0',
+    'neutral': '#BFC7CF',
+    'neutral_light': '#E9EDF2',
+    'violet': '#8E8BFE',
+    'coral': '#E88482',
+    'heatmap_low': '#8EC9F2',
+    'heatmap_high': '#F2A0A1',
+}
+
+
+def _apply_paper_style():
+    plt.rcParams.update({
+        'font.family': 'DejaVu Sans',
+        'font.size': 8,
+        'axes.titlesize': 9,
+        'axes.labelsize': 8,
+        'xtick.labelsize': 7,
+        'ytick.labelsize': 7,
+        'axes.titleweight': 'normal',
+        'axes.labelweight': 'normal',
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+        'savefig.facecolor': 'white',
+        'axes.edgecolor': COLORS['axis'],
+        'text.color': COLORS['ink'],
+        'axes.labelcolor': COLORS['axis'],
+        'xtick.color': COLORS['axis'],
+        'ytick.color': COLORS['axis'],
+    })
 
 
 METHODS = {
@@ -454,13 +488,31 @@ def _is_chemically_salient(token):
 
 
 def _attention_cmap():
-    return LinearSegmentedColormap.from_list(
-        'muted_attention',
-        ['#f7f7f2', '#d8ddd8', '#9fb3b2', '#607f8e', '#2f4b5c'],
+    cmap = LinearSegmentedColormap.from_list(
+        'light_sky_white_red',
+        [(0.0, COLORS['heatmap_low']), (0.5, '#FFFFFF'), (1.0, COLORS['heatmap_high'])],
     )
+    cmap.set_bad('#FAFBFC')
+    return cmap
+
+
+def _zscore_norm(values):
+    vmax = max(1.0, np.nanpercentile(np.abs(values), 96))
+    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+    return norm, vmax
+
+
+def _row_zscore(values):
+    values = np.asarray(values, dtype=float)
+    mean = np.nanmean(values)
+    std = np.nanstd(values)
+    if not np.isfinite(std) or std < 1e-12:
+        return np.zeros_like(values)
+    return (values - mean) / std
 
 
 def plot_attention_case(case_id, rows, output_path):
+    _apply_paper_style()
     plt.rcParams.update({
         'font.family': 'DejaVu Sans',
         'axes.titlesize': 11,
@@ -476,24 +528,24 @@ def plot_attention_case(case_id, rows, output_path):
         squeeze=False,
         constrained_layout=True,
     )
-    fig.patch.set_facecolor('#fbfbf8')
+    fig.patch.set_facecolor('white')
     fig.suptitle(
         f'Attention rollout for {case_id}',
-        fontsize=12,
-        fontweight='bold',
-        color='#252a31',
+        fontsize=9,
+        fontweight='normal',
+        color=COLORS['ink'],
     )
     cmap = _attention_cmap()
-    max_score = max(float(np.max(row['scores'])) for row in rows)
-    norm = Normalize(vmin=0.0, vmax=max_score)
+    z_rows = [_row_zscore(row['scores']) for row in rows]
+    norm, vmax = _zscore_norm(np.concatenate(z_rows))
 
-    for ax, row in zip(axes[:, 0], rows):
+    for ax, row, z_scores in zip(axes[:, 0], rows, z_rows):
         tokens = row['tokens']
         scores = np.asarray(row['scores'])
         salient = [_is_chemically_salient(token) for token in tokens]
         top_idx = set(np.argsort(scores)[-3:])
 
-        ax.imshow(scores[np.newaxis, :], cmap=cmap, norm=norm, aspect='auto', extent=(-0.5, len(tokens) - 0.5, 0, 1))
+        ax.imshow(z_scores[np.newaxis, :], cmap=cmap, norm=norm, aspect='auto', extent=(-0.5, len(tokens) - 0.5, 0, 1))
         for idx, is_salient in enumerate(salient):
             if is_salient:
                 ax.add_patch(Rectangle(
@@ -501,19 +553,19 @@ def plot_attention_case(case_id, rows, output_path):
                     1,
                     1,
                     fill=False,
-                    edgecolor='#8a6f4d',
-                    linewidth=1.1,
+                    edgecolor=COLORS['coral'],
+                    linewidth=0.8,
                 ))
         for idx in top_idx:
-            ax.plot(idx, 1.12, marker='v', markersize=4.5, color='#5b6470', clip_on=False)
+            ax.plot(idx, 1.12, marker='v', markersize=3.8, color=COLORS['violet'], clip_on=False)
             ax.text(
                 idx,
                 1.24,
                 f'{scores[idx]:.3f}',
                 ha='center',
                 va='bottom',
-                fontsize=7,
-                color='#4b5563',
+                fontsize=6.5,
+                color=COLORS['axis'],
             )
 
         ax.set_xticks(np.arange(len(tokens)))
@@ -525,12 +577,12 @@ def plot_attention_case(case_id, rows, output_path):
         )
         for label, is_salient in zip(ax.get_xticklabels(), salient):
             if is_salient:
-                label.set_color('#6f5d49')
+                label.set_color(COLORS['coral'])
                 label.set_fontweight('bold')
         ax.set_yticks([])
         ax.set_ylabel(
             row['variant_label'].replace('_', ' ').title(),
-            color='#252a31',
+            color=COLORS['ink'],
             fontweight='bold',
             fontsize=9,
             labelpad=8,
@@ -540,12 +592,12 @@ def plot_attention_case(case_id, rows, output_path):
             loc='left',
             fontsize=8,
             fontweight='normal',
-            color='#667085',
+            color=COLORS['axis'],
             pad=6,
         )
         ax.set_xlim(-0.5, len(tokens) - 0.5)
         ax.set_ylim(-0.08, 1.36)
-        ax.set_facecolor('#fbfbf8')
+        ax.set_facecolor('white')
         ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
         ax.tick_params(axis='x', length=0, pad=4, labelsize=8)
 
@@ -556,13 +608,16 @@ def plot_attention_case(case_id, rows, output_path):
         shrink=0.62,
         pad=0.015,
     )
-    cbar.set_label('CLS rollout', fontsize=8, color='#4b5563')
-    cbar.ax.tick_params(labelsize=7, length=2, colors='#6b7280')
+    cbar.set_label('Row z-score', fontsize=7, color=COLORS['axis'])
+    cbar.set_ticks([-vmax, 0, vmax])
+    cbar.set_ticklabels([f'{-vmax:.1f}', '0', f'{vmax:.1f}'])
+    cbar.ax.tick_params(labelsize=7, length=2, colors=COLORS['axis'])
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 
 def plot_attention_overview(rows, output_path):
+    _apply_paper_style()
     plt.rcParams.update({
         'font.family': 'DejaVu Sans',
         'axes.titlesize': 10,
@@ -577,85 +632,107 @@ def plot_attention_overview(rows, output_path):
         matrix[row_idx, :len(scores)] = scores
 
     cmap = _attention_cmap().copy()
-    cmap.set_bad('#fbfbf8')
-    norm = Normalize(vmin=0.0, vmax=float(np.nanmax(matrix)))
+    z_matrix = np.vstack([_row_zscore(row) for row in matrix])
+    filled = np.nan_to_num(z_matrix, nan=0.0)
+    if len(rows) > 1:
+        row_order = dendrogram(linkage(filled, method='average', metric='euclidean'), no_plot=True)['leaves']
+    else:
+        row_order = [0]
+    ordered_rows = [rows[idx] for idx in row_order]
+    ordered_z = z_matrix[row_order]
+    norm, vmax = _zscore_norm(ordered_z)
 
-    fig, ax = plt.subplots(
-        figsize=(max(11.0, max_len * 0.36 + 4.0), max(5.5, len(rows) * 0.42 + 1.6)),
+    fig = plt.figure(
+        figsize=(max(9.2, max_len * 0.34 + 3.6), max(5.2, len(rows) * 0.40 + 1.3)),
         constrained_layout=True,
     )
-    fig.patch.set_facecolor('#fbfbf8')
-    ax.set_facecolor('#fbfbf8')
+    gs = fig.add_gridspec(1, 3, width_ratios=[max_len * 0.34, 1.55, 0.08], wspace=0.035)
+    ax = fig.add_subplot(gs[0, 0])
+    ax_text = fig.add_subplot(gs[0, 1], sharey=ax)
+    cax = fig.add_subplot(gs[0, 2])
+    fig.patch.set_facecolor('white')
+
+    ax.set_facecolor('white')
     ax.imshow(
-        matrix,
+        ordered_z,
         cmap=cmap,
         norm=norm,
         aspect='auto',
         interpolation='nearest',
-        extent=(-0.5, max_len - 0.5, len(rows) - 0.5, -0.5),
     )
 
     ylabels = []
-    for row_idx, row in enumerate(rows):
+    top_text_rows = []
+    variant_colors = []
+    for row_idx, row in enumerate(ordered_rows):
         scores = np.asarray(row['scores'])
         tokens = row['tokens']
-        salient = [_is_chemically_salient(token) for token in tokens]
-        top_idx = list(np.argsort(scores)[-3:][::-1])
-        for token_idx, is_salient in enumerate(salient):
-            if is_salient:
-                ax.add_patch(Rectangle(
-                    (token_idx - 0.5, row_idx - 0.5),
-                    1,
-                    1,
-                    fill=False,
-                    edgecolor='#8a6f4d',
-                    linewidth=0.8,
-                ))
+        top_idx = list(np.argsort(scores)[-2:][::-1])
         for token_idx in top_idx:
-            ax.plot(token_idx, row_idx, marker='.', markersize=4, color='#303846')
-
-        top_text = ', '.join(
-            f'{_display_token(tokens[idx])} {scores[idx]:.3f}'
-            for idx in top_idx
+            z_value = ordered_z[row_idx, token_idx]
+            ax.add_patch(Rectangle(
+                (token_idx - 0.5, row_idx - 0.5),
+                1,
+                1,
+                fill=False,
+                edgecolor=COLORS['ink'],
+                linewidth=0.45,
+                alpha=0.55,
+            ))
+            ax.text(
+                token_idx,
+                row_idx,
+                f'z={z_value:+.1f}',
+                ha='center',
+                va='center',
+                fontsize=5.0,
+                color=COLORS['ink'],
+                alpha=0.88,
+            )
+        top_text_rows.append(
+            ', '.join(f'{_display_token(tokens[idx])} {scores[idx]:.3f}' for idx in top_idx)
         )
-        ax.text(
-            max_len + 0.25,
-            row_idx,
-            top_text,
-            ha='left',
-            va='center',
-            fontsize=7,
-            color='#4b5563',
-        )
-        label = f"{row['case_id'].replace('cid_', '')} | {row['variant_label'].replace('_', ' ')}"
-        ylabels.append(label)
+        short_id = row['case_id'].replace('cid_', '')
+        if row['variant_label'] == 'original':
+            ylabels.append(f'{short_id}  O')
+            variant_colors.append(COLORS['violet'])
+        else:
+            ylabels.append(f'{short_id}  R')
+            variant_colors.append(COLORS['coral'])
 
-    for boundary in range(2, len(rows), 2):
-        ax.axhline(boundary - 0.5, color='#d6d3cb', linewidth=0.7)
-
-    ax.set_yticks(np.arange(len(rows)))
+    ax.set_yticks(np.arange(len(ordered_rows)))
     ax.set_yticklabels(ylabels)
-    ax.set_xticks(np.arange(max_len))
+    for tick_label, color in zip(ax.get_yticklabels(), variant_colors):
+        tick_label.set_color(color)
+    ax.set_xticks(np.arange(0, max_len, 2))
     ax.set_xlabel('Token position')
-    ax.set_title('Attention rollout overview across selected cases', loc='left', fontweight='bold', color='#252a31')
-    ax.text(
-        max_len + 0.25,
-        -0.85,
-        'Top-3 tokens',
+    ax.set_title('Attention z-score by case and variant', loc='left', color=COLORS['ink'])
+    ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+    ax.tick_params(axis='both', length=0, colors=COLORS['axis'])
+    for tick_label, color in zip(ax.get_yticklabels(), variant_colors):
+        tick_label.set_color(color)
+
+    ax_text.set_facecolor('white')
+    ax_text.set_xlim(0, 1)
+    ax_text.set_ylim(ax.get_ylim())
+    ax_text.axis('off')
+    ax_text.text(
+        0.0,
+        -0.72,
+        'Top attention tokens (raw score)',
         ha='left',
         va='center',
-        fontsize=8,
-        fontweight='bold',
-        color='#252a31',
+        fontsize=7.5,
+        color=COLORS['ink'],
     )
-    ax.set_xlim(-0.5, max_len + 5.2)
-    ax.set_ylim(len(rows) - 0.5, -1.0)
-    ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
-    ax.tick_params(axis='both', length=0, colors='#667085')
+    for row_idx, top_text in enumerate(top_text_rows):
+        ax_text.text(0.0, row_idx, top_text, ha='left', va='center', fontsize=6.5, color=COLORS['axis'])
 
-    cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax, location='right', shrink=0.78, pad=0.01)
-    cbar.set_label('CLS rollout', fontsize=8, color='#4b5563')
-    cbar.ax.tick_params(labelsize=7, length=2, colors='#6b7280')
+    cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), cax=cax)
+    cbar.set_label('Row z-score', fontsize=7, color=COLORS['axis'])
+    cbar.set_ticks([-vmax, 0, vmax])
+    cbar.set_ticklabels([f'{-vmax:.1f}', '0', f'{vmax:.1f}'])
+    cbar.ax.tick_params(labelsize=7, length=2, colors=COLORS['axis'])
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -698,18 +775,11 @@ def attention_visualization(selected_cases, model, tokenizer, config):
                     'attention_rollout': score,
                 })
 
-        figure_path = figures_dir / f"{case['case_id']}.png"
-        plot_attention_case(case['case_id'], plot_rows, figure_path)
         overview_rows.extend(plot_rows)
-        figure_rows.append({
-            'case_id': case['case_id'],
-            'case_type': case['case_type'],
-            'figure': str(figure_path),
-        })
 
     overview_path = figures_dir / 'attention_overview_all_cases.png'
     plot_attention_overview(overview_rows, overview_path)
-    figure_rows.insert(0, {
+    figure_rows.append({
         'case_id': 'all_selected_cases',
         'case_type': 'combined overview',
         'figure': str(overview_path),
@@ -719,23 +789,66 @@ def attention_visualization(selected_cases, model, tokenizer, config):
 
 
 def save_core_effect_plot(core_df):
+    _apply_paper_style()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    fig.patch.set_facecolor('#fbfbf8')
-    ax.set_facecolor('#fbfbf8')
-    x = np.arange(len(core_df))
-    ax.bar(x, core_df['relative_improvement_pct'], color=['#78909c', '#a58b6f', '#7f9b8f'], edgecolor='#ffffff')
-    ax.axhline(0, color='#374151', linewidth=0.8)
-    ax.set_xticks(x)
-    ax.set_xticklabels(core_df['effect'], rotation=12, ha='right')
-    ax.set_ylabel('Relative RMSE improvement (%)')
-    ax.set_title('Core effects behind Aug + Two-stage', loc='left', fontweight='bold')
-    ax.grid(axis='y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
-    ax.spines[['top', 'right', 'left']].set_visible(False)
-    ax.tick_params(axis='y', length=0, colors='#667085')
-    for idx, value in enumerate(core_df['relative_improvement_pct']):
-        ax.text(idx, value + 0.6, f'{value:.1f}%', ha='center', va='bottom', fontsize=9, color='#374151')
-    plt.tight_layout()
+    plot_df = core_df.sort_values('relative_improvement_pct', ascending=True).reset_index(drop=True)
+    y = np.arange(len(plot_df))
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(8.8, 3.0),
+        gridspec_kw={'width_ratios': [1.05, 1.45]},
+        constrained_layout=True,
+    )
+    fig.patch.set_facecolor('white')
+
+    ax_rmse, ax_gain = axes
+    for ax in axes:
+        ax.set_facecolor('white')
+        ax.spines[['top', 'right']].set_visible(False)
+        ax.spines[['left', 'bottom']].set_linewidth(0.6)
+        ax.tick_params(length=2.5, width=0.6, colors=COLORS['axis'])
+
+    for idx, row in plot_df.iterrows():
+        ax_rmse.hlines(
+            y=idx,
+            xmin=row['candidate_RMSE'],
+            xmax=row['baseline_RMSE'],
+            color=COLORS['neutral'],
+            linewidth=1.0,
+            zorder=1,
+        )
+    ax_rmse.scatter(plot_df['baseline_RMSE'], y, s=30, color=COLORS['coral'], label='Baseline', zorder=3)
+    ax_rmse.scatter(plot_df['candidate_RMSE'], y, s=30, color=COLORS['violet'], label='Aug + Two-stage', zorder=3)
+    ax_rmse.set_yticks(y)
+    ax_rmse.set_yticklabels(plot_df['effect'])
+    ax_rmse.set_xlabel('RMSE')
+    ax_rmse.set_title('Paired RMSE', loc='left')
+    ax_rmse.grid(axis='x', color=COLORS['grid'], linewidth=0.6)
+    ax_rmse.legend(frameon=False, fontsize=7, loc='lower right')
+
+    bar_colors = [COLORS['violet'] if idx % 2 == 0 else COLORS['coral'] for idx in range(len(plot_df))]
+    ax_gain.barh(
+        y,
+        plot_df['relative_improvement_pct'],
+        height=0.22,
+        color=bar_colors,
+        edgecolor='white',
+        linewidth=0.8,
+        zorder=2,
+    )
+    ax_gain.scatter(plot_df['relative_improvement_pct'], y, s=22, color=COLORS['ink'], zorder=4)
+    ax_gain.axvline(0, color=COLORS['axis'], linewidth=0.8)
+    ax_gain.set_yticks(y)
+    ax_gain.set_yticklabels([])
+    ax_gain.set_xlabel('Relative RMSE improvement (%)')
+    ax_gain.set_title('Effect size', loc='left')
+    ax_gain.grid(axis='x', color=COLORS['grid'], linewidth=0.6, zorder=0)
+    xmax = max(plot_df['relative_improvement_pct'].max() * 1.16, 5)
+    ax_gain.set_xlim(0, xmax)
+    for idx, value in enumerate(plot_df['relative_improvement_pct']):
+        ax_gain.text(value + xmax * 0.018, idx, f'{value:.1f}%', va='center', fontsize=7, color=COLORS['axis'])
+
     path = FIGURES_DIR / 'core_effects.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -743,21 +856,22 @@ def save_core_effect_plot(core_df):
 
 
 def _method_colors(methods):
-    palette = ['#607d8b', '#8d7b68', '#7a8f75', '#8b8996', '#6f8f9f']
+    palette = [COLORS['violet'], COLORS['coral']]
     return {method: palette[idx % len(palette)] for idx, method in enumerate(methods)}
 
 
 def save_method_performance_plot(all_runs, method_df):
+    _apply_paper_style()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     methods = method_df['method'].tolist()
     colors = _method_colors(methods)
     metrics = [('RMSE', 'Lower is better'), ('MAE', 'Lower is better'), ('R2', 'Higher is better')]
-    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.0), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.5), constrained_layout=True)
+    fig.patch.set_facecolor('white')
 
     rng = np.random.default_rng(5240)
     for ax, (metric, subtitle) in zip(axes, metrics):
-        ax.set_facecolor('#fbfbf8')
+        ax.set_facecolor('white')
         for idx, method in enumerate(methods):
             values = all_runs.loc[all_runs['method'] == method, metric].to_numpy()
             jitter = rng.normal(0, 0.045, size=len(values))
@@ -777,19 +891,20 @@ def save_method_performance_plot(all_runs, method_df):
                 yerr=std,
                 fmt='D',
                 markersize=5,
-                color='#252a31',
-                ecolor='#252a31',
+                color=COLORS['ink'],
+                ecolor=COLORS['ink'],
                 elinewidth=1.0,
                 capsize=3,
                 zorder=4,
             )
-        ax.set_title(f'{metric}\n{subtitle}', loc='left', fontsize=10, fontweight='bold', color='#252a31')
+        ax.set_title(f'{metric}\n{subtitle}', loc='left', fontsize=8.5, fontweight='normal', color=COLORS['ink'])
         ax.set_xticks(np.arange(len(methods)))
         ax.set_xticklabels(methods, rotation=35, ha='right')
-        ax.grid(axis='y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
-        ax.spines[['top', 'right', 'left']].set_visible(False)
-        ax.tick_params(axis='y', length=0, colors='#667085')
-        ax.tick_params(axis='x', length=0, colors='#4b5563')
+        ax.grid(axis='y', color=COLORS['grid'], linewidth=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+        ax.spines[['left', 'bottom']].set_linewidth(0.6)
+        ax.tick_params(axis='y', length=2.5, width=0.6, colors=COLORS['axis'])
+        ax.tick_params(axis='x', length=2.5, width=0.6, colors=COLORS['axis'])
     path = FIGURES_DIR / 'method_performance.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -797,11 +912,12 @@ def save_method_performance_plot(all_runs, method_df):
 
 
 def save_error_tail_plot(tail_df):
+    _apply_paper_style()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     methods = tail_df['method'].tolist()
     colors = _method_colors(methods)
-    fig, axes = plt.subplots(1, 2, figsize=(11.8, 4.2), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 2, figsize=(9.8, 3.6), constrained_layout=True)
+    fig.patch.set_facecolor('white')
 
     quantile_cols = [
         ('median_abs_error', 'Median'),
@@ -823,7 +939,7 @@ def save_error_tail_plot(tail_df):
     axes[0].set_xticks(x)
     axes[0].set_xticklabels([label for _, label in quantile_cols])
     axes[0].set_ylabel('Absolute error (eV)')
-    axes[0].set_title('Error distribution tail', loc='left', fontweight='bold')
+    axes[0].set_title('Error distribution tail', loc='left')
 
     y = np.arange(len(methods))
     axes[1].barh(
@@ -836,15 +952,16 @@ def save_error_tail_plot(tail_df):
     axes[1].set_yticklabels(methods)
     axes[1].invert_yaxis()
     axes[1].set_xlabel('Predictions with abs error > 0.20 eV (%)')
-    axes[1].set_title('Large-error rate', loc='left', fontweight='bold')
+    axes[1].set_title('Large-error rate', loc='left')
     for idx, value in enumerate(tail_df['pct_abs_error_gt_0.20']):
-        axes[1].text(value + 0.4, idx, f'{value:.1f}%', va='center', fontsize=8, color='#4b5563')
+        axes[1].text(value + 0.4, idx, f'{value:.1f}%', va='center', fontsize=7, color=COLORS['axis'])
 
     for ax in axes:
-        ax.set_facecolor('#fbfbf8')
-        ax.grid(axis='x' if ax is axes[1] else 'y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
-        ax.spines[['top', 'right', 'left']].set_visible(False)
-        ax.tick_params(length=0, colors='#667085')
+        ax.set_facecolor('white')
+        ax.grid(axis='x' if ax is axes[1] else 'y', color=COLORS['grid'], linewidth=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+        ax.spines[['left', 'bottom']].set_linewidth(0.6)
+        ax.tick_params(length=2.5, width=0.6, colors=COLORS['axis'])
     axes[0].legend(frameon=False, fontsize=8, loc='upper left')
     path = FIGURES_DIR / 'error_tail_summary.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
@@ -853,6 +970,7 @@ def save_error_tail_plot(tail_df):
 
 
 def save_smiles_consistency_plot(consistency_df):
+    _apply_paper_style()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     summary = (
         consistency_df
@@ -867,27 +985,28 @@ def save_smiles_consistency_plot(consistency_df):
         .sort_values('prediction_range', ascending=True)
     )
     y_positions = {case_id: idx for idx, case_id in enumerate(summary['case_id'])}
-    fig, ax = plt.subplots(figsize=(9.8, 5.2), constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
-    ax.set_facecolor('#fbfbf8')
+    fig, ax = plt.subplots(figsize=(8.2, 4.4), constrained_layout=True)
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
 
     for _, row in summary.iterrows():
         y = y_positions[row['case_id']]
-        ax.hlines(y, row['pred_min'], row['pred_max'], color='#78909c', linewidth=2.4, alpha=0.8)
-        ax.plot(row['true'], y, marker='|', markersize=16, color='#5f554a', markeredgewidth=2.0)
+        ax.hlines(y, row['pred_min'], row['pred_max'], color=COLORS['violet'], linewidth=2.0, alpha=0.72)
+        ax.plot(row['true'], y, marker='|', markersize=13, color=COLORS['coral'], markeredgewidth=1.6)
         variants = consistency_df[consistency_df['case_id'] == row['case_id']]
-        ax.scatter(variants['prediction'], np.full(len(variants), y), s=24, color='#2f4b5c', alpha=0.72, zorder=3)
-        ax.text(row['pred_max'] + 0.025, y, f'range {row["prediction_range"]:.3f}', va='center', fontsize=7, color='#667085')
+        ax.scatter(variants['prediction'], np.full(len(variants), y), s=18, color=COLORS['violet'], alpha=0.9, zorder=3)
+        ax.text(row['pred_max'] + 0.025, y, f'range {row["prediction_range"]:.3f}', va='center', fontsize=6.5, color=COLORS['axis'])
 
     ax.set_yticks(np.arange(len(summary)))
     ax.set_yticklabels([case_id.replace('cid_', '') for case_id in summary['case_id']])
     ax.set_xlabel('Predicted / true energy (eV)')
-    ax.set_title('SMILES consistency across randomized equivalent strings', loc='left', fontweight='bold')
-    ax.grid(axis='x', color='#d6d3cb', linewidth=0.7, alpha=0.7)
-    ax.spines[['top', 'right', 'left']].set_visible(False)
-    ax.tick_params(length=0, colors='#667085')
+    ax.set_title('SMILES consistency across randomized equivalent strings', loc='left')
+    ax.grid(axis='x', color=COLORS['grid'], linewidth=0.6)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.spines[['left', 'bottom']].set_linewidth(0.6)
+    ax.tick_params(length=2.5, width=0.6, colors=COLORS['axis'])
     ax.text(0.01, 0.02, 'Dots: predictions for SMILES variants; vertical ticks: true labels.',
-            transform=ax.transAxes, fontsize=8, color='#667085')
+            transform=ax.transAxes, fontsize=7, color=COLORS['axis'])
     path = FIGURES_DIR / 'smiles_consistency.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -895,34 +1014,36 @@ def save_smiles_consistency_plot(consistency_df):
 
 
 def save_special_case_plot(selected_cases):
+    _apply_paper_style()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     cases = selected_cases.sort_values('abs_error_mean', ascending=True)
     y = np.arange(len(cases))
-    fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.2), gridspec_kw={'width_ratios': [1.4, 1.0]}, constrained_layout=True)
-    fig.patch.set_facecolor('#fbfbf8')
+    fig, axes = plt.subplots(1, 2, figsize=(9.8, 4.3), gridspec_kw={'width_ratios': [1.4, 1.0]}, constrained_layout=True)
+    fig.patch.set_facecolor('white')
 
-    axes[0].hlines(y, cases['true'], cases['pred_mean'], color='#aeb8b5', linewidth=2.0)
-    axes[0].scatter(cases['true'], y, marker='|', s=140, color='#5f554a', linewidth=2.2, label='True')
-    axes[0].scatter(cases['pred_mean'], y, s=26, color='#2f4b5c', alpha=0.82, label='Pred mean')
+    axes[0].hlines(y, cases['true'], cases['pred_mean'], color=COLORS['violet'], linewidth=1.8, alpha=0.72)
+    axes[0].scatter(cases['true'], y, marker='|', s=110, color=COLORS['coral'], linewidth=1.8, label='True')
+    axes[0].scatter(cases['pred_mean'], y, s=20, color=COLORS['violet'], alpha=0.95, label='Pred mean')
     axes[0].set_yticks(y)
     axes[0].set_yticklabels([case_id.replace('cid_', '') for case_id in cases['case_id']])
     axes[0].set_xlabel('Energy (eV)')
-    axes[0].set_title('True vs predicted mean', loc='left', fontweight='bold')
+    axes[0].set_title('True vs predicted mean', loc='left')
     axes[0].legend(frameon=False, fontsize=8, loc='lower right')
 
-    axes[1].barh(y, cases['abs_error_mean'], color='#78909c', edgecolor='#ffffff')
+    axes[1].barh(y, cases['abs_error_mean'], color=COLORS['coral'], edgecolor='white')
     axes[1].set_yticks(y)
     axes[1].set_yticklabels([])
     axes[1].set_xlabel('Mean absolute error (eV)')
-    axes[1].set_title('Selected-case error', loc='left', fontweight='bold')
+    axes[1].set_title('Selected-case error', loc='left')
     for idx, value in enumerate(cases['abs_error_mean']):
-        axes[1].text(value + 0.006, idx, f'{value:.3f}', va='center', fontsize=8, color='#4b5563')
+        axes[1].text(value + 0.006, idx, f'{value:.3f}', va='center', fontsize=7, color=COLORS['axis'])
 
     for ax in axes:
-        ax.set_facecolor('#fbfbf8')
-        ax.grid(axis='x', color='#d6d3cb', linewidth=0.7, alpha=0.7)
-        ax.spines[['top', 'right', 'left']].set_visible(False)
-        ax.tick_params(length=0, colors='#667085')
+        ax.set_facecolor('white')
+        ax.grid(axis='x', color=COLORS['grid'], linewidth=0.6)
+        ax.spines[['top', 'right']].set_visible(False)
+        ax.spines[['left', 'bottom']].set_linewidth(0.6)
+        ax.tick_params(length=2.5, width=0.6, colors=COLORS['axis'])
     path = FIGURES_DIR / 'special_case_errors.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -931,11 +1052,7 @@ def save_special_case_plot(selected_cases):
 
 def save_visual_summaries(all_runs, method_df, tail_df, selected_cases, consistency_df, core_df):
     figure_rows = [
-        {'figure': str(save_method_performance_plot(all_runs, method_df)), 'description': 'Cross-validation RMSE, MAE, and R2 across methods.'},
         {'figure': str(save_core_effect_plot(core_df)), 'description': 'Relative RMSE improvement for the three core effects.'},
-        {'figure': str(save_error_tail_plot(tail_df)), 'description': 'Absolute-error quantiles and large-error rates.'},
-        {'figure': str(save_smiles_consistency_plot(consistency_df)), 'description': 'Prediction variation across randomized equivalent SMILES.'},
-        {'figure': str(save_special_case_plot(selected_cases)), 'description': 'True vs predicted values and errors for selected cases.'},
     ]
     return pd.DataFrame(figure_rows)
 
