@@ -8,10 +8,14 @@ selected SMILES and randomized equivalent variants.
 import argparse
 from pathlib import Path
 import random
+import textwrap
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.cm import ScalarMappable
+from matplotlib.patches import Rectangle
 import numpy as np
 import pandas as pd
 import torch
@@ -85,32 +89,120 @@ def tokenize_and_score(model, tokenizer, smiles, device, max_length):
     return visible
 
 
+def _display_token(token):
+    return token.replace('Ġ', '').replace('▁', '')
+
+
+def _is_chemically_salient(token):
+    markers = ['+', '-', 'Br', 'Cl', 'I', 'Na', 'Li', 'K', 'Rb', 'Cs', 'O', 'B', 'N']
+    return any(mark in token for mark in markers)
+
+
+def _attention_cmap():
+    return LinearSegmentedColormap.from_list(
+        'muted_attention',
+        ['#f7f7f2', '#d8ddd8', '#9fb3b2', '#607f8e', '#2f4b5c'],
+    )
+
+
 def plot_case(case_name, variant_rows, output_path):
+    plt.rcParams.update({
+        'font.family': 'DejaVu Sans',
+        'axes.titlesize': 11,
+        'axes.labelsize': 9,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+    })
     max_len = max(len(row['tokens']) for row in variant_rows)
     fig, axes = plt.subplots(
         len(variant_rows),
         1,
-        figsize=(max(9, max_len * 0.42), 2.6 * len(variant_rows)),
+        figsize=(max(9.5, max_len * 0.42), 1.55 * len(variant_rows) + 1.35),
         squeeze=False,
+        constrained_layout=True,
     )
+    fig.patch.set_facecolor('#fbfbf8')
+    fig.suptitle(
+        f'Attention rollout for {case_name}',
+        fontsize=12,
+        fontweight='bold',
+        color='#252a31',
+    )
+    cmap = _attention_cmap()
+    max_score = max(float(np.max(row['scores'])) for row in variant_rows)
+    norm = Normalize(vmin=0.0, vmax=max_score)
 
     for ax, row in zip(axes[:, 0], variant_rows):
         tokens = row['tokens']
-        scores = row['scores']
-        x = np.arange(len(tokens))
-        colors = [
-            '#d95f02' if any(mark in token for mark in ['+', '-', 'Br', 'Cl', 'I', 'Na', 'Li', 'K', 'Rb', 'Cs', 'O'])
-            else '#1f77b4'
-            for token in tokens
-        ]
-        ax.bar(x, scores, color=colors, edgecolor='black', linewidth=0.4)
-        ax.set_xticks(x)
-        ax.set_xticklabels(tokens, rotation=45, ha='right', fontsize=9)
-        ax.set_ylabel('CLS rollout')
-        ax.set_title(f"{case_name} | {row['variant_label']}: {row['smiles']}", fontsize=10)
-        ax.grid(axis='y', alpha=0.25)
+        scores = np.asarray(row['scores'])
+        salient = [_is_chemically_salient(token) for token in tokens]
+        top_idx = set(np.argsort(scores)[-3:])
 
-    plt.tight_layout()
+        ax.imshow(scores[np.newaxis, :], cmap=cmap, norm=norm, aspect='auto', extent=(-0.5, len(tokens) - 0.5, 0, 1))
+        for idx, is_salient in enumerate(salient):
+            if is_salient:
+                ax.add_patch(Rectangle(
+                    (idx - 0.5, 0),
+                    1,
+                    1,
+                    fill=False,
+                    edgecolor='#8a6f4d',
+                    linewidth=1.1,
+                ))
+        for idx in top_idx:
+            ax.plot(idx, 1.12, marker='v', markersize=4.5, color='#5b6470', clip_on=False)
+            ax.text(
+                idx,
+                1.24,
+                f'{scores[idx]:.3f}',
+                ha='center',
+                va='bottom',
+                fontsize=7,
+                color='#4b5563',
+            )
+
+        ax.set_xticks(np.arange(len(tokens)))
+        ax.set_xticklabels(
+            [_display_token(token) for token in tokens],
+            rotation=45,
+            ha='right',
+            rotation_mode='anchor',
+        )
+        for label, is_salient in zip(ax.get_xticklabels(), salient):
+            if is_salient:
+                label.set_color('#6f5d49')
+                label.set_fontweight('bold')
+        ax.set_yticks([])
+        ax.set_ylabel(
+            row['variant_label'].replace('_', ' ').title(),
+            color='#252a31',
+            fontweight='bold',
+            fontsize=9,
+            labelpad=8,
+        )
+        ax.set_title(
+            textwrap.fill(row['smiles'], width=120),
+            loc='left',
+            fontsize=8,
+            fontweight='normal',
+            color='#667085',
+            pad=6,
+        )
+        ax.set_xlim(-0.5, len(tokens) - 0.5)
+        ax.set_ylim(-0.08, 1.36)
+        ax.set_facecolor('#fbfbf8')
+        ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+        ax.tick_params(axis='x', length=0, pad=4, labelsize=8)
+
+    cbar = fig.colorbar(
+        ScalarMappable(norm=norm, cmap=cmap),
+        ax=axes[:, 0],
+        location='right',
+        shrink=0.62,
+        pad=0.015,
+    )
+    cbar.set_label('CLS rollout', fontsize=8, color='#4b5563')
+    cbar.ax.tick_params(labelsize=7, length=2, colors='#6b7280')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 

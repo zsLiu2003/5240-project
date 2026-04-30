@@ -10,6 +10,7 @@ Outputs are written to results/deep_analysis/.
 import os
 from pathlib import Path
 import random
+import textwrap
 
 os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
 os.environ.setdefault('HF_HUB_OFFLINE', '1')
@@ -18,6 +19,9 @@ os.environ.setdefault('MPLCONFIGDIR', '/tmp/matplotlib-ceng5240')
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.cm import ScalarMappable
+from matplotlib.patches import Rectangle
 import numpy as np
 import pandas as pd
 import torch
@@ -439,27 +443,218 @@ def attention_scores(model, tokenizer, config, smiles):
     ]
 
 
+def _display_token(token):
+    return token.replace('Ġ', '').replace('▁', '')
+
+
+def _is_chemically_salient(token):
+    markers = ['+', '-', 'Br', 'Cl', 'I', 'Na', 'Li', 'K', 'Rb', 'Cs', 'O', 'B', 'N']
+    return any(mark in token for mark in markers)
+
+
+def _attention_cmap():
+    return LinearSegmentedColormap.from_list(
+        'muted_attention',
+        ['#f7f7f2', '#d8ddd8', '#9fb3b2', '#607f8e', '#2f4b5c'],
+    )
+
+
 def plot_attention_case(case_id, rows, output_path):
+    plt.rcParams.update({
+        'font.family': 'DejaVu Sans',
+        'axes.titlesize': 11,
+        'axes.labelsize': 9,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+    })
+    max_len = max(len(row['tokens']) for row in rows)
     fig, axes = plt.subplots(
         len(rows),
         1,
-        figsize=(max(8, max(len(row['tokens']) for row in rows) * 0.45), 2.5 * len(rows)),
+        figsize=(max(9.5, max_len * 0.42), 1.55 * len(rows) + 1.35),
         squeeze=False,
+        constrained_layout=True,
     )
-    markers = ['+', '-', 'Br', 'Cl', 'I', 'Na', 'Li', 'K', 'Rb', 'Cs', 'O', 'B', 'N']
+    fig.patch.set_facecolor('#fbfbf8')
+    fig.suptitle(
+        f'Attention rollout for {case_id}',
+        fontsize=12,
+        fontweight='bold',
+        color='#252a31',
+    )
+    cmap = _attention_cmap()
+    max_score = max(float(np.max(row['scores'])) for row in rows)
+    norm = Normalize(vmin=0.0, vmax=max_score)
+
     for ax, row in zip(axes[:, 0], rows):
-        x = np.arange(len(row['tokens']))
-        colors = [
-            '#d95f02' if any(mark in token for mark in markers) else '#1f77b4'
-            for token in row['tokens']
-        ]
-        ax.bar(x, row['scores'], color=colors, edgecolor='black', linewidth=0.35)
-        ax.set_xticks(x)
-        ax.set_xticklabels(row['tokens'], rotation=45, ha='right', fontsize=9)
-        ax.set_ylabel('CLS rollout')
-        ax.set_title(f"{case_id} | {row['variant_label']}: {row['smiles']}", fontsize=10)
-        ax.grid(axis='y', alpha=0.25)
-    plt.tight_layout()
+        tokens = row['tokens']
+        scores = np.asarray(row['scores'])
+        salient = [_is_chemically_salient(token) for token in tokens]
+        top_idx = set(np.argsort(scores)[-3:])
+
+        ax.imshow(scores[np.newaxis, :], cmap=cmap, norm=norm, aspect='auto', extent=(-0.5, len(tokens) - 0.5, 0, 1))
+        for idx, is_salient in enumerate(salient):
+            if is_salient:
+                ax.add_patch(Rectangle(
+                    (idx - 0.5, 0),
+                    1,
+                    1,
+                    fill=False,
+                    edgecolor='#8a6f4d',
+                    linewidth=1.1,
+                ))
+        for idx in top_idx:
+            ax.plot(idx, 1.12, marker='v', markersize=4.5, color='#5b6470', clip_on=False)
+            ax.text(
+                idx,
+                1.24,
+                f'{scores[idx]:.3f}',
+                ha='center',
+                va='bottom',
+                fontsize=7,
+                color='#4b5563',
+            )
+
+        ax.set_xticks(np.arange(len(tokens)))
+        ax.set_xticklabels(
+            [_display_token(token) for token in tokens],
+            rotation=45,
+            ha='right',
+            rotation_mode='anchor',
+        )
+        for label, is_salient in zip(ax.get_xticklabels(), salient):
+            if is_salient:
+                label.set_color('#6f5d49')
+                label.set_fontweight('bold')
+        ax.set_yticks([])
+        ax.set_ylabel(
+            row['variant_label'].replace('_', ' ').title(),
+            color='#252a31',
+            fontweight='bold',
+            fontsize=9,
+            labelpad=8,
+        )
+        ax.set_title(
+            textwrap.fill(row['smiles'], width=120),
+            loc='left',
+            fontsize=8,
+            fontweight='normal',
+            color='#667085',
+            pad=6,
+        )
+        ax.set_xlim(-0.5, len(tokens) - 0.5)
+        ax.set_ylim(-0.08, 1.36)
+        ax.set_facecolor('#fbfbf8')
+        ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+        ax.tick_params(axis='x', length=0, pad=4, labelsize=8)
+
+    cbar = fig.colorbar(
+        ScalarMappable(norm=norm, cmap=cmap),
+        ax=axes[:, 0],
+        location='right',
+        shrink=0.62,
+        pad=0.015,
+    )
+    cbar.set_label('CLS rollout', fontsize=8, color='#4b5563')
+    cbar.ax.tick_params(labelsize=7, length=2, colors='#6b7280')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_attention_overview(rows, output_path):
+    plt.rcParams.update({
+        'font.family': 'DejaVu Sans',
+        'axes.titlesize': 10,
+        'axes.labelsize': 9,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 7,
+    })
+    max_len = max(len(row['tokens']) for row in rows)
+    matrix = np.full((len(rows), max_len), np.nan)
+    for row_idx, row in enumerate(rows):
+        scores = np.asarray(row['scores'])
+        matrix[row_idx, :len(scores)] = scores
+
+    cmap = _attention_cmap().copy()
+    cmap.set_bad('#fbfbf8')
+    norm = Normalize(vmin=0.0, vmax=float(np.nanmax(matrix)))
+
+    fig, ax = plt.subplots(
+        figsize=(max(11.0, max_len * 0.36 + 4.0), max(5.5, len(rows) * 0.42 + 1.6)),
+        constrained_layout=True,
+    )
+    fig.patch.set_facecolor('#fbfbf8')
+    ax.set_facecolor('#fbfbf8')
+    ax.imshow(
+        matrix,
+        cmap=cmap,
+        norm=norm,
+        aspect='auto',
+        interpolation='nearest',
+        extent=(-0.5, max_len - 0.5, len(rows) - 0.5, -0.5),
+    )
+
+    ylabels = []
+    for row_idx, row in enumerate(rows):
+        scores = np.asarray(row['scores'])
+        tokens = row['tokens']
+        salient = [_is_chemically_salient(token) for token in tokens]
+        top_idx = list(np.argsort(scores)[-3:][::-1])
+        for token_idx, is_salient in enumerate(salient):
+            if is_salient:
+                ax.add_patch(Rectangle(
+                    (token_idx - 0.5, row_idx - 0.5),
+                    1,
+                    1,
+                    fill=False,
+                    edgecolor='#8a6f4d',
+                    linewidth=0.8,
+                ))
+        for token_idx in top_idx:
+            ax.plot(token_idx, row_idx, marker='.', markersize=4, color='#303846')
+
+        top_text = ', '.join(
+            f'{_display_token(tokens[idx])} {scores[idx]:.3f}'
+            for idx in top_idx
+        )
+        ax.text(
+            max_len + 0.25,
+            row_idx,
+            top_text,
+            ha='left',
+            va='center',
+            fontsize=7,
+            color='#4b5563',
+        )
+        label = f"{row['case_id'].replace('cid_', '')} | {row['variant_label'].replace('_', ' ')}"
+        ylabels.append(label)
+
+    for boundary in range(2, len(rows), 2):
+        ax.axhline(boundary - 0.5, color='#d6d3cb', linewidth=0.7)
+
+    ax.set_yticks(np.arange(len(rows)))
+    ax.set_yticklabels(ylabels)
+    ax.set_xticks(np.arange(max_len))
+    ax.set_xlabel('Token position')
+    ax.set_title('Attention rollout overview across selected cases', loc='left', fontweight='bold', color='#252a31')
+    ax.text(
+        max_len + 0.25,
+        -0.85,
+        'Top-3 tokens',
+        ha='left',
+        va='center',
+        fontsize=8,
+        fontweight='bold',
+        color='#252a31',
+    )
+    ax.set_xlim(-0.5, max_len + 5.2)
+    ax.set_ylim(len(rows) - 0.5, -1.0)
+    ax.spines[['top', 'right', 'left', 'bottom']].set_visible(False)
+    ax.tick_params(axis='both', length=0, colors='#667085')
+
+    cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax, location='right', shrink=0.78, pad=0.01)
+    cbar.set_label('CLS rollout', fontsize=8, color='#4b5563')
+    cbar.ax.tick_params(labelsize=7, length=2, colors='#6b7280')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -470,6 +665,7 @@ def attention_visualization(selected_cases, model, tokenizer, config):
     rng = random.Random(5240)
     top_rows = []
     figure_rows = []
+    overview_rows = []
 
     for _, case in selected_cases.iterrows():
         variants = [('original', case['SMILES'])]
@@ -483,6 +679,8 @@ def attention_visualization(selected_cases, model, tokenizer, config):
             tokens = [token for token, _ in visible]
             scores = [score for _, score in visible]
             plot_rows.append({
+                'case_id': case['case_id'],
+                'case_type': case['case_type'],
                 'variant_label': variant_label,
                 'smiles': smiles,
                 'tokens': tokens,
@@ -501,11 +699,20 @@ def attention_visualization(selected_cases, model, tokenizer, config):
 
         figure_path = figures_dir / f"{case['case_id']}.png"
         plot_attention_case(case['case_id'], plot_rows, figure_path)
+        overview_rows.extend(plot_rows)
         figure_rows.append({
             'case_id': case['case_id'],
             'case_type': case['case_type'],
             'figure': str(figure_path),
         })
+
+    overview_path = figures_dir / 'attention_overview_all_cases.png'
+    plot_attention_overview(overview_rows, overview_path)
+    figure_rows.insert(0, {
+        'case_id': 'all_selected_cases',
+        'case_type': 'combined overview',
+        'figure': str(overview_path),
+    })
 
     return pd.DataFrame(top_rows), pd.DataFrame(figure_rows)
 

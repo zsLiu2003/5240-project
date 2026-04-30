@@ -1,4 +1,5 @@
 case_id,case_type,figure
+all_selected_cases,combined overview,/hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/attention_overview_all_cases.png
 cid_23718351_1,largest-error failure,/hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_23718351_1.png
 cid_140455213_2,halogen failure,/hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_140455213_2.png
 cid_159330689_3,additional high-error failure,/hdd2/zesen/daily/5240/5240-project/results/deep_analysis/attention_figures/cid_159330689_3.png
