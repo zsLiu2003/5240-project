@@ -1,0 +1,7 @@
+figure,description
+/hdd2/zesen/daily/5240/5240-project/results/figures/experiment_metric_overview.png,"All pre-deep-analysis methods summarized by RMSE, MAE, and R2."
+/hdd2/zesen/daily/5240/5240-project/results/figures/cv_rmse_heatmap.png,RMSE heatmap across seeds and folds for the four final CV experiments.
+/hdd2/zesen/daily/5240/5240-project/results/figures/cv_metric_distribution.png,Distribution of CV fold metrics before deep-analysis interpretation.
+/hdd2/zesen/daily/5240/5240-project/results/figures/prediction_scatter_representative.png,True-vs-predicted scatter for representative pre-deep-analysis methods.
+/hdd2/zesen/daily/5240/5240-project/results/figures/prediction_error_distribution.png,Residual and absolute-error distributions for representative methods.
+/hdd2/zesen/daily/5240/5240-project/results/figures/smiles_robustness_summary.png,SMILES robustness probe before deep-analysis case selection.

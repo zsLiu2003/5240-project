@@ -35,6 +35,7 @@ from smiles_augmentation import randomize_smiles
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = PROJECT_ROOT / 'results'
 OUTPUT_DIR = RESULTS_DIR / 'deep_analysis'
+FIGURES_DIR = OUTPUT_DIR / 'figures'
 
 
 METHODS = {
@@ -718,25 +719,230 @@ def attention_visualization(selected_cases, model, tokenizer, config):
 
 
 def save_core_effect_plot(core_df):
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig.patch.set_facecolor('#fbfbf8')
+    ax.set_facecolor('#fbfbf8')
     x = np.arange(len(core_df))
-    ax.bar(x, core_df['relative_improvement_pct'], color=['#4c78a8', '#f58518', '#54a24b'])
-    ax.axhline(0, color='black', linewidth=0.8)
+    ax.bar(x, core_df['relative_improvement_pct'], color=['#78909c', '#a58b6f', '#7f9b8f'], edgecolor='#ffffff')
+    ax.axhline(0, color='#374151', linewidth=0.8)
     ax.set_xticks(x)
     ax.set_xticklabels(core_df['effect'], rotation=12, ha='right')
     ax.set_ylabel('Relative RMSE improvement (%)')
-    ax.set_title('Core Effects Behind Aug + Two-stage')
+    ax.set_title('Core effects behind Aug + Two-stage', loc='left', fontweight='bold')
+    ax.grid(axis='y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
+    ax.spines[['top', 'right', 'left']].set_visible(False)
+    ax.tick_params(axis='y', length=0, colors='#667085')
     for idx, value in enumerate(core_df['relative_improvement_pct']):
-        ax.text(idx, value + 0.6, f'{value:.1f}%', ha='center', va='bottom', fontsize=10)
+        ax.text(idx, value + 0.6, f'{value:.1f}%', ha='center', va='bottom', fontsize=9, color='#374151')
     plt.tight_layout()
-    path = OUTPUT_DIR / 'core_effects.png'
+    path = FIGURES_DIR / 'core_effects.png'
     plt.savefig(path, dpi=300, bbox_inches='tight')
     plt.close()
     return path
 
 
+def _method_colors(methods):
+    palette = ['#607d8b', '#8d7b68', '#7a8f75', '#8b8996', '#6f8f9f']
+    return {method: palette[idx % len(palette)] for idx, method in enumerate(methods)}
+
+
+def save_method_performance_plot(all_runs, method_df):
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    methods = method_df['method'].tolist()
+    colors = _method_colors(methods)
+    metrics = [('RMSE', 'Lower is better'), ('MAE', 'Lower is better'), ('R2', 'Higher is better')]
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.0), constrained_layout=True)
+    fig.patch.set_facecolor('#fbfbf8')
+
+    rng = np.random.default_rng(5240)
+    for ax, (metric, subtitle) in zip(axes, metrics):
+        ax.set_facecolor('#fbfbf8')
+        for idx, method in enumerate(methods):
+            values = all_runs.loc[all_runs['method'] == method, metric].to_numpy()
+            jitter = rng.normal(0, 0.045, size=len(values))
+            ax.scatter(
+                np.full(len(values), idx) + jitter,
+                values,
+                s=16,
+                color=colors[method],
+                alpha=0.38,
+                edgecolor='none',
+            )
+            mean = method_df.loc[method_df['method'] == method, f'{metric}_mean'].iloc[0]
+            std = method_df.loc[method_df['method'] == method, f'{metric}_std'].iloc[0]
+            ax.errorbar(
+                idx,
+                mean,
+                yerr=std,
+                fmt='D',
+                markersize=5,
+                color='#252a31',
+                ecolor='#252a31',
+                elinewidth=1.0,
+                capsize=3,
+                zorder=4,
+            )
+        ax.set_title(f'{metric}\n{subtitle}', loc='left', fontsize=10, fontweight='bold', color='#252a31')
+        ax.set_xticks(np.arange(len(methods)))
+        ax.set_xticklabels(methods, rotation=35, ha='right')
+        ax.grid(axis='y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
+        ax.spines[['top', 'right', 'left']].set_visible(False)
+        ax.tick_params(axis='y', length=0, colors='#667085')
+        ax.tick_params(axis='x', length=0, colors='#4b5563')
+    path = FIGURES_DIR / 'method_performance.png'
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    return path
+
+
+def save_error_tail_plot(tail_df):
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    methods = tail_df['method'].tolist()
+    colors = _method_colors(methods)
+    fig, axes = plt.subplots(1, 2, figsize=(11.8, 4.2), constrained_layout=True)
+    fig.patch.set_facecolor('#fbfbf8')
+
+    quantile_cols = [
+        ('median_abs_error', 'Median'),
+        ('q75_abs_error', 'Q75'),
+        ('q90_abs_error', 'Q90'),
+        ('max_abs_error', 'Max'),
+    ]
+    x = np.arange(len(quantile_cols))
+    for _, row in tail_df.iterrows():
+        axes[0].plot(
+            x,
+            [row[col] for col, _ in quantile_cols],
+            marker='o',
+            linewidth=1.6,
+            markersize=4,
+            color=colors[row['method']],
+            label=row['method'],
+        )
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels([label for _, label in quantile_cols])
+    axes[0].set_ylabel('Absolute error (eV)')
+    axes[0].set_title('Error distribution tail', loc='left', fontweight='bold')
+
+    y = np.arange(len(methods))
+    axes[1].barh(
+        y,
+        tail_df['pct_abs_error_gt_0.20'],
+        color=[colors[method] for method in methods],
+        edgecolor='#ffffff',
+    )
+    axes[1].set_yticks(y)
+    axes[1].set_yticklabels(methods)
+    axes[1].invert_yaxis()
+    axes[1].set_xlabel('Predictions with abs error > 0.20 eV (%)')
+    axes[1].set_title('Large-error rate', loc='left', fontweight='bold')
+    for idx, value in enumerate(tail_df['pct_abs_error_gt_0.20']):
+        axes[1].text(value + 0.4, idx, f'{value:.1f}%', va='center', fontsize=8, color='#4b5563')
+
+    for ax in axes:
+        ax.set_facecolor('#fbfbf8')
+        ax.grid(axis='x' if ax is axes[1] else 'y', color='#d6d3cb', linewidth=0.7, alpha=0.7)
+        ax.spines[['top', 'right', 'left']].set_visible(False)
+        ax.tick_params(length=0, colors='#667085')
+    axes[0].legend(frameon=False, fontsize=8, loc='upper left')
+    path = FIGURES_DIR / 'error_tail_summary.png'
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    return path
+
+
+def save_smiles_consistency_plot(consistency_df):
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    summary = (
+        consistency_df
+        .groupby(['case_id', 'case_type', 'CID'], as_index=False)
+        .agg(
+            true=('true', 'first'),
+            pred_min=('prediction', 'min'),
+            pred_max=('prediction', 'max'),
+            prediction_std=('variant_prediction_std', 'max'),
+            prediction_range=('variant_prediction_range', 'max'),
+        )
+        .sort_values('prediction_range', ascending=True)
+    )
+    y_positions = {case_id: idx for idx, case_id in enumerate(summary['case_id'])}
+    fig, ax = plt.subplots(figsize=(9.8, 5.2), constrained_layout=True)
+    fig.patch.set_facecolor('#fbfbf8')
+    ax.set_facecolor('#fbfbf8')
+
+    for _, row in summary.iterrows():
+        y = y_positions[row['case_id']]
+        ax.hlines(y, row['pred_min'], row['pred_max'], color='#78909c', linewidth=2.4, alpha=0.8)
+        ax.plot(row['true'], y, marker='|', markersize=16, color='#5f554a', markeredgewidth=2.0)
+        variants = consistency_df[consistency_df['case_id'] == row['case_id']]
+        ax.scatter(variants['prediction'], np.full(len(variants), y), s=24, color='#2f4b5c', alpha=0.72, zorder=3)
+        ax.text(row['pred_max'] + 0.025, y, f'range {row["prediction_range"]:.3f}', va='center', fontsize=7, color='#667085')
+
+    ax.set_yticks(np.arange(len(summary)))
+    ax.set_yticklabels([case_id.replace('cid_', '') for case_id in summary['case_id']])
+    ax.set_xlabel('Predicted / true energy (eV)')
+    ax.set_title('SMILES consistency across randomized equivalent strings', loc='left', fontweight='bold')
+    ax.grid(axis='x', color='#d6d3cb', linewidth=0.7, alpha=0.7)
+    ax.spines[['top', 'right', 'left']].set_visible(False)
+    ax.tick_params(length=0, colors='#667085')
+    ax.text(0.01, 0.02, 'Dots: predictions for SMILES variants; vertical ticks: true labels.',
+            transform=ax.transAxes, fontsize=8, color='#667085')
+    path = FIGURES_DIR / 'smiles_consistency.png'
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    return path
+
+
+def save_special_case_plot(selected_cases):
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    cases = selected_cases.sort_values('abs_error_mean', ascending=True)
+    y = np.arange(len(cases))
+    fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.2), gridspec_kw={'width_ratios': [1.4, 1.0]}, constrained_layout=True)
+    fig.patch.set_facecolor('#fbfbf8')
+
+    axes[0].hlines(y, cases['true'], cases['pred_mean'], color='#aeb8b5', linewidth=2.0)
+    axes[0].scatter(cases['true'], y, marker='|', s=140, color='#5f554a', linewidth=2.2, label='True')
+    axes[0].scatter(cases['pred_mean'], y, s=26, color='#2f4b5c', alpha=0.82, label='Pred mean')
+    axes[0].set_yticks(y)
+    axes[0].set_yticklabels([case_id.replace('cid_', '') for case_id in cases['case_id']])
+    axes[0].set_xlabel('Energy (eV)')
+    axes[0].set_title('True vs predicted mean', loc='left', fontweight='bold')
+    axes[0].legend(frameon=False, fontsize=8, loc='lower right')
+
+    axes[1].barh(y, cases['abs_error_mean'], color='#78909c', edgecolor='#ffffff')
+    axes[1].set_yticks(y)
+    axes[1].set_yticklabels([])
+    axes[1].set_xlabel('Mean absolute error (eV)')
+    axes[1].set_title('Selected-case error', loc='left', fontweight='bold')
+    for idx, value in enumerate(cases['abs_error_mean']):
+        axes[1].text(value + 0.006, idx, f'{value:.3f}', va='center', fontsize=8, color='#4b5563')
+
+    for ax in axes:
+        ax.set_facecolor('#fbfbf8')
+        ax.grid(axis='x', color='#d6d3cb', linewidth=0.7, alpha=0.7)
+        ax.spines[['top', 'right', 'left']].set_visible(False)
+        ax.tick_params(length=0, colors='#667085')
+    path = FIGURES_DIR / 'special_case_errors.png'
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    return path
+
+
+def save_visual_summaries(all_runs, method_df, tail_df, selected_cases, consistency_df, core_df):
+    figure_rows = [
+        {'figure': str(save_method_performance_plot(all_runs, method_df)), 'description': 'Cross-validation RMSE, MAE, and R2 across methods.'},
+        {'figure': str(save_core_effect_plot(core_df)), 'description': 'Relative RMSE improvement for the three core effects.'},
+        {'figure': str(save_error_tail_plot(tail_df)), 'description': 'Absolute-error quantiles and large-error rates.'},
+        {'figure': str(save_smiles_consistency_plot(consistency_df)), 'description': 'Prediction variation across randomized equivalent SMILES.'},
+        {'figure': str(save_special_case_plot(selected_cases)), 'description': 'True vs predicted values and errors for selected cases.'},
+    ]
+    return pd.DataFrame(figure_rows)
+
+
 def write_markdown_outputs(method_df, core_df, tail_df, selected_cases,
-                           consistency_df, attention_top_df, attention_figures):
+                           consistency_df, attention_top_df, attention_figures,
+                           visual_figures):
     final_tail = tail_df[tail_df['method'] == FINAL_METHOD].iloc[0]
 
     a_report = [
@@ -750,6 +956,8 @@ def write_markdown_outputs(method_df, core_df, tail_df, selected_cases,
         'Stage 1 warm-up adds a smaller stabilization effect before encoder updates.',
         '',
         '## A1. Core Result Interpretation',
+        '',
+        markdown_table(visual_figures),
         '',
         markdown_table(core_df[
             ['effect', 'baseline_RMSE', 'candidate_RMSE', 'relative_improvement_pct',
@@ -841,6 +1049,10 @@ def write_markdown_outputs(method_df, core_df, tail_df, selected_cases,
         '',
         '## Method Overview',
         '',
+        'The main quantitative results are visualized in `results/deep_analysis/figures/`.',
+        '',
+        markdown_table(visual_figures),
+        '',
         markdown_table(method_df),
         '',
         '## Core Effects',
@@ -902,7 +1114,7 @@ def main():
     model, tokenizer, config, label_stats = load_final_model()
     consistency_df = smiles_consistency_probe(selected_cases, model, tokenizer, config, label_stats)
     attention_top_df, attention_figures = attention_visualization(selected_cases, model, tokenizer, config)
-    core_plot_path = save_core_effect_plot(core_df)
+    visual_figures = save_visual_summaries(all_runs, method_df, tail_df, selected_cases, consistency_df, core_df)
 
     method_df.to_csv(OUTPUT_DIR / 'method_overview.csv', index=False)
     core_df.to_csv(OUTPUT_DIR / 'core_effect_summary.csv', index=False)
@@ -912,14 +1124,16 @@ def main():
     consistency_df.to_csv(OUTPUT_DIR / 'smiles_consistency_probe.csv', index=False)
     attention_top_df.to_csv(OUTPUT_DIR / 'attention_top_tokens.csv', index=False)
     attention_figures.to_csv(OUTPUT_DIR / 'attention_figures.csv', index=False)
+    visual_figures.to_csv(OUTPUT_DIR / 'visual_figures.csv', index=False)
 
     write_markdown_outputs(
         method_df, core_df, tail_df, selected_cases,
         consistency_df, attention_top_df, attention_figures,
+        visual_figures,
     )
 
     print(f'Wrote deep analysis outputs to {OUTPUT_DIR}')
-    print(f'Core effects plot: {core_plot_path}')
+    print(f'Visual figures: {FIGURES_DIR}')
 
 
 if __name__ == '__main__':

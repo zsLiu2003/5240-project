@@ -6,6 +6,14 @@ The final method works because it combines two complementary mechanisms: SMILES 
 
 ## A1. Core Result Interpretation
 
+| figure | description |
+| --- | --- |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/method_performance.png | Cross-validation RMSE, MAE, and R2 across methods. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/core_effects.png | Relative RMSE improvement for the three core effects. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/error_tail_summary.png | Absolute-error quantiles and large-error rates. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/smiles_consistency.png | Prediction variation across randomized equivalent SMILES. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/special_case_errors.png | True vs predicted values and errors for selected cases. |
+
 | effect | baseline_RMSE | candidate_RMSE | relative_improvement_pct | folds_improved | folds_worse |
 | --- | --- | --- | --- | --- | --- |
 | SMILES augmentation | 0.1507 | 0.1312 | 12.9189 | 15 | 0 |

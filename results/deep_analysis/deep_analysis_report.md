@@ -6,6 +6,16 @@ The four-experiment comparison suggests that the final method succeeds through a
 
 ## Method Overview
 
+The main quantitative results are visualized in `results/deep_analysis/figures/`.
+
+| figure | description |
+| --- | --- |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/method_performance.png | Cross-validation RMSE, MAE, and R2 across methods. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/core_effects.png | Relative RMSE improvement for the three core effects. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/error_tail_summary.png | Absolute-error quantiles and large-error rates. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/smiles_consistency.png | Prediction variation across randomized equivalent SMILES. |
+| /hdd2/zesen/daily/5240/5240-project/results/deep_analysis/figures/special_case_errors.png | True vs predicted values and errors for selected cases. |
+
 | method | runs | RMSE_mean | RMSE_std | MAE_mean | MAE_std | R2_mean | R2_std | worst_fold_RMSE |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | No Aug + Two-stage | 15 | 0.1507 | 0.0169 | 0.1182 | 0.0137 | 0.4020 | 0.1972 | 0.1930 |
