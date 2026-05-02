@@ -230,15 +230,22 @@ Interpretation:
 
 ### Slide 14: Attention Visualization
 
-Use attention figures from:
+Use the current combined attention overview figures from:
 
 `results/deep_analysis/attention_figures/`
 
 Recommended figures:
 
-- `cid_23718351_1.png`: largest-error failure, `[B-]OC.[Na+]`
-- `cid_140455213_2.png`: halogen or ionic failure, `[Li+].[O-]I`
-- `cid_129740401_8.png`: low-error success contrast, `Cl[I-]Cl.[K+]`
+- `results/deep_analysis/attention_figures/attention_overview_all_cases_numbered_redblue_saved.png`: recommended presentation figure, numbered selected cases with red/blue attention styling.
+- `results/deep_analysis/attention_figures/attention_overview_all_cases_clean_saved.png`: cleaner backup version.
+- `results/deep_analysis/attention_figures/attention_overview_all_cases_outlined_saved.png`: outlined backup version.
+- `results/deep_analysis/attention_figures/attention_overview_all_cases.png`: original combined overview recorded in `attention_figures.csv`.
+
+The old individual case figures have been removed. Use the combined overview and explain these cases within it:
+
+- `cid_23718351_1`: largest-error failure, `[B-]OC.[Na+]`
+- `cid_140455213_2`: halogen or ionic failure, `[Li+].[O-]I`
+- `cid_129740401_8`: low-error success contrast, `Cl[I-]Cl.[K+]`
 
 Important caution:
 
@@ -291,7 +298,7 @@ Suggested final points:
 
 | Speaker | Topic | Time |
 |---|---|---:|
-| Speaker 1 | Background and data processing | 3 min |
+| Speaker 1 | Background and data processing | 3 min |·
 | Speaker 2 | Model and training strategy | 3 min |
 | Speaker 3 | Results and analysis | 3 min |
 | Speaker 4 | Special cases and limitations | 3 min |
